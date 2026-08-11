@@ -1,0 +1,25 @@
+'use client';
+
+import { BarChart3, CalendarCheck, RotateCcw, Settings, ShieldCheck, Tag, Users } from 'lucide-react';
+import { RequireAuth } from '@/components/auth/require-auth';
+import { DashboardShell, type NavItem } from '@/components/dashboard/shell';
+
+const NAV: NavItem[] = [
+  { href: '/admin', label: 'Overview', icon: BarChart3, exact: true },
+  { href: '/admin/events', label: 'Event Approvals', icon: CalendarCheck },
+  { href: '/admin/organizers', label: 'Organizers', icon: ShieldCheck },
+  { href: '/admin/users', label: 'Users', icon: Users },
+  { href: '/admin/coupons', label: 'Coupons', icon: Tag },
+  { href: '/admin/refunds', label: 'Refunds', icon: RotateCcw },
+  { href: '/admin/settings', label: 'Settings', icon: Settings },
+];
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <RequireAuth roles={['admin']} fallbackMessage="The admin console is restricted to platform administrators.">
+      <DashboardShell title="Admin Console" subtitle="Platform operations" nav={NAV} accent="violet">
+        {children}
+      </DashboardShell>
+    </RequireAuth>
+  );
+}
