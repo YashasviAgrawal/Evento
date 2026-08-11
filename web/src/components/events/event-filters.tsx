@@ -127,8 +127,8 @@ export function EventFilters({
 
   return (
     <>
-      {/* Toolbar */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      {/* Toolbar — spans both grid columns on desktop */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 lg:col-span-full">
         <p className="text-sm text-ink-500">
           <span className="font-semibold text-ink-900">{total}</span> {total === 1 ? 'event' : 'events'} found
         </p>
@@ -161,7 +161,7 @@ export function EventFilters({
 
       {/* Active filter pills */}
       {activeFilters.length > 0 && (
-        <div className="mb-5 flex flex-wrap items-center gap-2">
+        <div className="mb-5 flex flex-wrap items-center gap-2 lg:col-span-full">
           {activeFilters.map((key) => (
             <button
               key={key}

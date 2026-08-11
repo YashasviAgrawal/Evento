@@ -41,7 +41,15 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
   const [result, categories, cities] = await Promise.all([
     fetchPublicPaged<EventCardType[]>('/events', query, 15),
     fetchPublic<Category[]>('/catalog/categories', undefined, 300),
-    fetchPublic<City[]>('/catalog/cities', undefined, 300),
+    fetchPublic<City[]>('/catalog/cities', {
+      category: query.category,
+      price: query.price,
+      when: query.when,
+      date: query.date,
+      q: query.q,
+      featured: query.featured,
+      organizer: query.organizer,
+    }, 15),
   ]);
 
   const events = result?.data ?? [];
