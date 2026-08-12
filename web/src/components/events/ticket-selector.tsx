@@ -6,8 +6,7 @@ import { Minus, Plus, ShoppingCart, Ticket } from 'lucide-react';
 import type { EventDetail, TicketType } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/index';
-import { useAuth } from '@/components/providers/auth-provider';
-import { cn, formatMoney, formatShortDate } from '@/lib/format';
+import { cn, formatMoney, formatShortDate, priceLabel } from '@/lib/format';
 
 const SALE_STATUS_LABEL: Record<TicketType['saleStatus'], string> = {
   on_sale: '',
@@ -19,7 +18,6 @@ const SALE_STATUS_LABEL: Record<TicketType['saleStatus'], string> = {
 
 export function TicketSelector({ event }: { event: EventDetail }) {
   const router = useRouter();
-  const { user } = useAuth();
   const [quantities, setQuantities] = useState<Record<string, number>>({});
 
   const bookable = event.status === 'published' && new Date(event.startsAt).getTime() > Date.now();
@@ -57,9 +55,15 @@ export function TicketSelector({ event }: { event: EventDetail }) {
       .map(([id, quantity]) => `${id}:${quantity}`)
       .join(',');
 
-    const target = `/checkout?event=${event.slug}&t=${encodeURIComponent(selection)}`;
-    // Send guests through sign-in, then straight back into checkout.
-    router.push(user ? target : `/auth/login?next=${encodeURIComponent(target)}`);
+    // Guests go straight to checkout. Making someone create an account before
+    // they can even see the total is the biggest drop-off in a ticketing
+    // funnel; checkout collects the sign-in at the payment step instead.
+    router.push(`/checkout?event=${event.slug}&t=${encodeURIComponent(selection)}`);
+  }
+
+  /** Mobile CTA scrolls the tier list into view before anything is chosen. */
+  function scrollToTickets() {
+    document.getElementById('ticket-tiers')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   if (event.ticketTypes.length === 0) {
@@ -73,7 +77,8 @@ export function TicketSelector({ event }: { event: EventDetail }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-card">
+    <>
+    <div id="ticket-tiers" className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-card scroll-mt-24">
       <div className="border-b border-ink-200 bg-ink-50 px-5 py-4">
         <h2 className="text-base font-bold text-ink-900">Select tickets</h2>
         <p className="mt-0.5 text-xs text-ink-500">Prices include all taxes shown at checkout</p>
@@ -166,5 +171,45 @@ export function TicketSelector({ event }: { event: EventDetail }) {
         </p>
       </div>
     </div>
+
+    {/*
+      Mobile booking bar.
+
+      On desktop the ticket panel is sticky in the sidebar and always visible.
+      On a phone it sits below the description, map, organizer and terms — so
+      without this the primary call to action is several screens down, on the
+      device most people actually browse events with.
+    */}
+    {bookable && (
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-ink-200 bg-white/95 p-3 shadow-[0_-4px_16px_-4px_rgba(15,23,42,0.12)] backdrop-blur lg:hidden">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            {count > 0 ? (
+              <>
+                <p className="text-xs text-ink-500">
+                  {count} {count === 1 ? 'ticket' : 'tickets'}
+                </p>
+                <p className="text-lg font-extrabold leading-tight text-ink-900">{formatMoney(subtotal)}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-ink-500">Starting from</p>
+                <p className="text-lg font-extrabold leading-tight text-ink-900">
+                  {priceLabel(event.minPricePaise, event.maxPricePaise, event.isFree)}
+                </p>
+              </>
+            )}
+          </div>
+
+          <Button size="lg" className="shrink-0 px-7" onClick={count === 0 ? scrollToTickets : proceed}>
+            {count === 0 ? 'Book now' : 'Continue'}
+          </Button>
+        </div>
+      </div>
+    )}
+
+    {/* Keeps the sticky bar from covering the end of the page on mobile. */}
+    {bookable && <div className="h-20 lg:hidden" aria-hidden />}
+    </>
   );
 }

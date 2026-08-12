@@ -182,7 +182,8 @@ async function countExistingTickets(
  */
 export async function quoteBooking(
   input: QuoteInput,
-  userId: string,
+  /** Null for a signed-out shopper — quoting reserves nothing, so it is safe. */
+  userId: string | null,
 ): Promise<PriceBreakdown & { couponCode?: string; couponError?: string }> {
   const event = await loadEventForBooking(null, input.eventId);
   const settings = await getSettings();

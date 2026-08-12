@@ -44,6 +44,11 @@ describe('calculatePricing', () => {
     expect(result.organizerPayoutPaise).toBe(180_000);
   });
 
+  it('caps the discount at the order value, leaving nothing owed', () => {
+    const result = calculatePricing([line(500, 1)], 999_999, RATES);
+    expect(result.discountPaise).toBe(50_000);
+  });
+
   it('applies tax and fees to the post-discount base, not the gross subtotal', () => {
     const discount = 20_000; // ₹200 off a ₹1,000 order
     const result = calculatePricing([line(1000, 1)], discount, RATES);
@@ -59,6 +64,45 @@ describe('calculatePricing', () => {
 
     // Commission + payout must reconstruct the taxable base exactly.
     expect(result.commissionPaise + result.organizerPayoutPaise).toBe(result.taxablePaise);
+  });
+
+  describe('who pays for a coupon', () => {
+    it('charges commission on the full price, so the organizer funds the discount', () => {
+      // ₹1,000 ticket, 50% off, 10% commission.
+      const result = calculatePricing([line(1000, 1)], 50_000, RATES);
+
+      expect(result.taxablePaise).toBe(50_000); // customer pays ₹500 of ticket value
+      expect(result.commissionPaise).toBe(10_000); // 10% of ₹1,000, not of ₹500
+      expect(result.organizerPayoutPaise).toBe(40_000); // organizer absorbs the whole ₹500
+    });
+
+    it('leaves platform revenue unchanged whether or not a coupon is used', () => {
+      const withoutCoupon = calculatePricing([line(1000, 1)], 0, RATES);
+      const withCoupon = calculatePricing([line(1000, 1)], 30_000, RATES);
+
+      expect(withCoupon.commissionPaise).toBe(withoutCoupon.commissionPaise);
+      // The organizer, not the platform, is out of pocket by the discount.
+      expect(withoutCoupon.organizerPayoutPaise - withCoupon.organizerPayoutPaise).toBe(30_000);
+    });
+
+    it('never charges more commission than was actually collected', () => {
+      // 95% off collects ₹50, but 10% of the original is ₹100. Taking that
+      // would imply a negative payout, which the database rejects outright.
+      const result = calculatePricing([line(1000, 1)], 95_000, RATES);
+
+      expect(result.taxablePaise).toBe(5_000);
+      expect(result.commissionPaise).toBeLessThanOrEqual(result.taxablePaise);
+      expect(result.organizerPayoutPaise).toBeGreaterThanOrEqual(0);
+      expect(result.commissionPaise + result.organizerPayoutPaise).toBe(result.taxablePaise);
+    });
+
+    it('handles a 100%-off coupon without going negative', () => {
+      const result = calculatePricing([line(1000, 2)], 200_000, RATES);
+
+      expect(result.totalPaise).toBe(0);
+      expect(result.commissionPaise).toBe(0);
+      expect(result.organizerPayoutPaise).toBe(0);
+    });
   });
 
   it('never lets a discount exceed the order value', () => {

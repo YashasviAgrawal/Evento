@@ -533,26 +533,34 @@ const couponBodySchema = z.object({
 
 router.get(
   '/coupons',
-  validate({ query: pageQuery }),
+  validate({ query: pageQuery.extend({ approval: z.enum(['pending', 'approved', 'rejected']).optional() }) }),
   asyncHandler(async (req, res) => {
-    const params = req.query as unknown as { q?: string; page: number; limit: number };
+    const params = req.query as unknown as { q?: string; approval?: string; page: number; limit: number };
+    const conditions: string[] = [];
     const values: unknown[] = [];
-    let where = '';
+
     if (params.q) {
       values.push(params.q);
-      where = `WHERE c.code ILIKE '%' || $1 || '%'`;
+      conditions.push(`c.code ILIKE '%' || $${values.length} || '%'`);
     }
+    if (params.approval) {
+      values.push(params.approval);
+      conditions.push(`c.approval_status = $${values.length}::coupon_approval`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
     const offset = (params.page - 1) * params.limit;
     values.push(params.limit, offset);
 
     const [list, count] = await Promise.all([
       query(
-        `SELECT c.*, e.title AS event_title, o.display_name AS organizer_name
+        `SELECT c.*, e.title AS event_title, o.display_name AS organizer_name,
+                (c.created_by_organizer IS NOT NULL) AS from_organizer
            FROM coupons c
            LEFT JOIN events e     ON e.id = c.event_id
            LEFT JOIN organizers o ON o.id = c.organizer_id
            ${where}
-           ORDER BY c.created_at DESC
+           ORDER BY (c.approval_status = 'pending') DESC, c.created_at DESC
            LIMIT $${values.length - 1} OFFSET $${values.length}`,
         values,
       ),
@@ -575,6 +583,9 @@ router.get(
         validFrom: row.valid_from,
         validUntil: row.valid_until,
         isActive: row.is_active,
+        approvalStatus: row.approval_status,
+        fromOrganizer: row.from_organizer,
+        reviewNote: row.review_note,
         eventTitle: row.event_title,
         organizerName: row.organizer_name,
         createdAt: row.created_at,
@@ -665,6 +676,64 @@ router.delete(
     const { rowCount } = await query('DELETE FROM coupons WHERE id = $1', [req.params.id]);
     if (!rowCount) throw new NotFoundError('Coupon');
     return ok(res, { message: 'Coupon deleted' });
+  }),
+);
+
+/**
+ * Approve an organizer's coupon. Only after this can a customer redeem it.
+ */
+router.post(
+  '/coupons/:id/approve',
+  validate({
+    params: z.object({ id: z.string().uuid() }),
+    body: z.object({ note: z.string().trim().max(500).optional() }),
+  }),
+  asyncHandler(async (req, res) => {
+    const admin = currentUser(req);
+    const { rowCount } = await query(
+      `UPDATE coupons
+          SET approval_status = 'approved', reviewed_by = $2, reviewed_at = now(), review_note = $3
+        WHERE id = $1 AND approval_status = 'pending'`,
+      [req.params.id, admin.id, req.body.note ?? null],
+    );
+    if (!rowCount) throw new ConflictError('This coupon is not awaiting review', 'INVALID_TRANSITION');
+
+    await audit({
+      actorId: admin.id,
+      actorRole: 'admin',
+      action: 'coupon.approved',
+      entityType: 'coupon',
+      entityId: req.params.id,
+    });
+    return ok(res, { approvalStatus: 'approved' });
+  }),
+);
+
+router.post(
+  '/coupons/:id/reject',
+  validate({
+    params: z.object({ id: z.string().uuid() }),
+    body: z.object({ note: z.string().trim().min(3, 'Tell the organizer why').max(500) }),
+  }),
+  asyncHandler(async (req, res) => {
+    const admin = currentUser(req);
+    const { rowCount } = await query(
+      `UPDATE coupons
+          SET approval_status = 'rejected', reviewed_by = $2, reviewed_at = now(), review_note = $3
+        WHERE id = $1 AND approval_status = 'pending'`,
+      [req.params.id, admin.id, req.body.note],
+    );
+    if (!rowCount) throw new ConflictError('This coupon is not awaiting review', 'INVALID_TRANSITION');
+
+    await audit({
+      actorId: admin.id,
+      actorRole: 'admin',
+      action: 'coupon.rejected',
+      entityType: 'coupon',
+      entityId: req.params.id,
+      metadata: { note: req.body.note },
+    });
+    return ok(res, { approvalStatus: 'rejected' });
   }),
 );
 

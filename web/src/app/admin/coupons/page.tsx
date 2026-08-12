@@ -1,13 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Search, Tag, Trash2 } from 'lucide-react';
+import { Check, Plus, Search, Tag, Trash2, X } from 'lucide-react';
 import { api, ApiError, type PageMeta } from '@/lib/api';
 import { PageHeader } from '@/components/dashboard/shell';
 import { Button } from '@/components/ui/button';
-import { Alert, EmptyState, Field, Input, Select, Skeleton, Textarea } from '@/components/ui/index';
+import { Alert, EmptyState, Field, Input, Select, Skeleton, StatusBadge, Textarea } from '@/components/ui/index';
 import { useToast } from '@/components/ui/toast';
-import { formatDateTime, formatMoney, formatNumber } from '@/lib/format';
+import { cn, formatDateTime, formatMoney, formatNumber } from '@/lib/format';
 
 interface Coupon {
   id: string;
@@ -23,10 +23,21 @@ interface Coupon {
   validFrom: string;
   validUntil: string | null;
   isActive: boolean;
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  /** True when an organizer authored it, so it needs review. */
+  fromOrganizer: boolean;
+  reviewNote: string | null;
   eventTitle: string | null;
   organizerName: string | null;
   createdAt: string;
 }
+
+const APPROVAL_TABS = [
+  { key: 'pending', label: 'Awaiting review' },
+  { key: '', label: 'All' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'rejected', label: 'Rejected' },
+];
 
 export default function AdminCouponsPage() {
   const toast = useToast();
@@ -38,6 +49,10 @@ export default function AdminCouponsPage() {
   const [debounced, setDebounced] = useState('');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [approval, setApproval] = useState('pending');
+  const [reviewing, setReviewing] = useState<{ id: string; action: 'approve' | 'reject' } | null>(null);
+  const [note, setNote] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -51,7 +66,7 @@ export default function AdminCouponsPage() {
     setLoading(true);
     try {
       const response = await api.get<Coupon[]>('/admin/coupons', {
-        query: { q: debounced || undefined, page, limit: 20 },
+        query: { q: debounced || undefined, approval: approval || undefined, page, limit: 20 },
       });
       setCoupons(response.data);
       setMeta(response.meta ?? null);
@@ -60,7 +75,26 @@ export default function AdminCouponsPage() {
     } finally {
       setLoading(false);
     }
-  }, [debounced, page]);
+  }, [debounced, approval, page]);
+
+  async function review(id: string, action: 'approve' | 'reject') {
+    if (action === 'reject' && note.trim().length < 3) {
+      toast.error('Add a reason', 'The organizer sees this note.');
+      return;
+    }
+    setBusyId(id);
+    try {
+      await api.post(`/admin/coupons/${id}/${action}`, { note: note.trim() || undefined });
+      toast.success(action === 'approve' ? 'Coupon approved — now live' : 'Coupon rejected');
+      setReviewing(null);
+      setNote('');
+      await load();
+    } catch (err) {
+      toast.error('Could not complete that', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -118,16 +152,64 @@ export default function AdminCouponsPage() {
         />
       )}
 
-      <div className="mb-5 relative max-w-sm">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search coupon codes"
-          className="pl-9"
-          aria-label="Search coupons"
-        />
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-1 rounded-lg bg-ink-100 p-1">
+          {APPROVAL_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => {
+                setApproval(tab.key);
+                setPage(1);
+              }}
+              className={cn(
+                'rounded-md px-3.5 py-1.5 text-sm font-medium transition',
+                approval === tab.key ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-600 hover:text-ink-900',
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative ml-auto w-full sm:w-64">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search coupon codes"
+            className="pl-9"
+            aria-label="Search coupons"
+          />
+        </div>
       </div>
+
+      {reviewing?.action === 'reject' && (
+        <div className="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4">
+          <Field label="Why is this coupon being rejected?" hint="The organizer sees this note on their dashboard">
+            <Textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              autoFocus
+              placeholder="The discount is steeper than we allow for this event tier."
+            />
+          </Field>
+          <div className="mt-3 flex gap-2">
+            <Button
+              variant="danger"
+              size="sm"
+              loading={busyId === reviewing.id}
+              disabled={note.trim().length < 3}
+              onClick={() => review(reviewing.id, 'reject')}
+            >
+              Reject coupon
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { setReviewing(null); setNote(''); }}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <Skeleton className="h-80 rounded-xl" />
@@ -158,8 +240,19 @@ export default function AdminCouponsPage() {
                   return (
                     <tr key={coupon.id} className="transition hover:bg-ink-50">
                       <td className="px-5 py-3.5">
-                        <p className="font-mono text-sm font-bold text-ink-900">{coupon.code}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-mono text-sm font-bold text-ink-900">{coupon.code}</p>
+                          {coupon.fromOrganizer && <StatusBadge status={coupon.approvalStatus} />}
+                        </div>
                         {coupon.description && <p className="mt-0.5 text-xs text-ink-500">{coupon.description}</p>}
+                        {coupon.fromOrganizer && (
+                          <p className="mt-0.5 text-xs text-ink-400">
+                            Created by {coupon.organizerName ?? 'an organizer'}
+                          </p>
+                        )}
+                        {coupon.approvalStatus === 'rejected' && coupon.reviewNote && (
+                          <p className="mt-1 text-xs text-rose-600">Rejected: {coupon.reviewNote}</p>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 font-medium text-ink-800">{describeDiscount(coupon)}</td>
                       <td className="px-5 py-3.5 text-xs text-ink-500">
@@ -183,18 +276,46 @@ export default function AdminCouponsPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => toggle(coupon)}>
-                            {coupon.isActive ? 'Deactivate' : 'Activate'}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-rose-600 hover:bg-rose-50"
-                            onClick={() => remove(coupon)}
-                            aria-label={`Delete ${coupon.code}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {coupon.approvalStatus === 'pending' ? (
+                            <>
+                              <Button
+                                variant="success"
+                                size="sm"
+                                loading={busyId === coupon.id}
+                                onClick={() => review(coupon.id, 'approve')}
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                                Approve
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-rose-300 text-rose-700 hover:bg-rose-50"
+                                onClick={() => {
+                                  setReviewing({ id: coupon.id, action: 'reject' });
+                                  setNote('');
+                                }}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                                Reject
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button variant="ghost" size="sm" onClick={() => toggle(coupon)}>
+                                {coupon.isActive ? 'Deactivate' : 'Activate'}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-rose-600 hover:bg-rose-50"
+                                onClick={() => remove(coupon)}
+                                aria-label={`Delete ${coupon.code}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

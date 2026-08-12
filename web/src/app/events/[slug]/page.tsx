@@ -19,6 +19,8 @@ import {
 import { fetchPublic } from '@/lib/api';
 import type { EventCard as EventCardType, EventDetail } from '@/lib/types';
 import { TicketSelector } from '@/components/events/ticket-selector';
+import { ShareButton } from '@/components/events/share-button';
+import { AddToCalendar } from '@/components/events/add-to-calendar';
 import { EventCard } from '@/components/events/event-card';
 import { Badge, StatusBadge } from '@/components/ui/index';
 import { formatEventDate, formatEventDateTime, formatEventTime, formatNumber, priceLabel } from '@/lib/format';
@@ -310,6 +312,23 @@ export default async function EventDetailPage({ params }: PageProps) {
 
           {/* ── Sticky booking column ── */}
           <div className="lg:sticky lg:top-24 lg:self-start">
+            <div className="mb-4 flex flex-wrap gap-2">
+              <ShareButton
+                title={event.title}
+                text={`${formatEventDate(event.startsAt)} at ${event.venue.name}, ${event.city.name}`}
+              />
+              <AddToCalendar
+                event={{
+                  title: event.title,
+                  description: event.subtitle ?? undefined,
+                  location: `${event.venue.name}, ${event.venue.addressLine1}, ${event.city.name}`,
+                  startsAt: event.startsAt,
+                  endsAt: event.endsAt,
+                }}
+                filename={`${event.slug}.ics`}
+              />
+            </div>
+
             <div className="mb-4 rounded-xl border border-ink-200 bg-white p-5 shadow-card">
               <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Starting from</p>
               <p className="mt-1 text-2xl font-extrabold text-ink-900">

@@ -148,7 +148,7 @@ router.get(
   '/categories',
   asyncHandler(async (_req, res) => {
     const { rows } = await query(
-      `SELECT c.id, c.name, c.slug, c.icon, c.color, c.description,
+      `SELECT c.id, c.name, c.slug, c.icon, c.color, c.description, c.image_url,
               (SELECT count(*)::int FROM events e
                 WHERE e.category_id = c.id AND e.status = 'published' AND e.ends_at > now()) AS event_count
          FROM categories c
@@ -165,6 +165,7 @@ router.get(
         icon: row.icon,
         color: row.color,
         description: row.description,
+        imageUrl: row.image_url,
         eventCount: row.event_count,
       })),
     );

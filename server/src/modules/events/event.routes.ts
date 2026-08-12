@@ -18,7 +18,13 @@ export const publicEventRoutes = Router();
 
 publicEventRoutes.get('/', validate({ query: eventListQuerySchema }), controller.listEvents);
 publicEventRoutes.get('/home', controller.homeFeed);
+publicEventRoutes.get(
+  '/suggest',
+  validate({ query: z.object({ q: z.string().trim().min(1).max(80) }) }),
+  controller.suggest,
+);
 publicEventRoutes.get('/:id/availability', validate({ params: eventIdParam }), controller.getEventAvailability);
+publicEventRoutes.get('/:id/coupons', validate({ params: eventIdParam }), controller.getEventCoupons);
 // Registered last so it cannot shadow the literal routes above.
 publicEventRoutes.get('/:slug', validate({ params: eventSlugParam }), optionalAuth, controller.getEvent);
 

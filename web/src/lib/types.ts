@@ -22,6 +22,7 @@ export interface Category {
   slug: string;
   icon: string | null;
   color: string;
+  imageUrl?: string | null;
   description?: string | null;
   eventCount?: number;
 }
@@ -131,6 +132,19 @@ export interface EventDetail {
     status: string;
   };
   ticketTypes: TicketType[];
+}
+
+/** A promo a shopper can actually use on this event, surfaced at checkout. */
+export interface AvailableCoupon {
+  code: string;
+  description: string | null;
+  type: 'percent' | 'flat';
+  value: number;
+  maxDiscountPaise: number | null;
+  minOrderPaise: number;
+  validUntil: string | null;
+  /** Pre-formatted summary from the API, e.g. "25% off, up to ₹500". */
+  label: string;
 }
 
 export interface PriceBreakdown {

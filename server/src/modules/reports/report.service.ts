@@ -163,6 +163,7 @@ export interface AdminSummary {
   commissionEarnedPaise: number;
   refundedPaise: number;
   pendingRefunds: number;
+  pendingCoupons: number;
   newUsersThisMonth: number;
 }
 
@@ -191,7 +192,8 @@ export async function getAdminSummary(): Promise<AdminSummary> {
     ),
     queryOne<Record<string, number>>(
       `SELECT count(*) FILTER (WHERE status = 'requested')::int AS pending,
-              (SELECT count(*)::int FROM organizers WHERE status = 'pending') AS pending_organizers
+              (SELECT count(*)::int FROM organizers WHERE status = 'pending') AS pending_organizers,
+              (SELECT count(*)::int FROM coupons WHERE approval_status = 'pending') AS pending_coupons
          FROM refunds`,
     ),
   ]);
@@ -211,6 +213,7 @@ export async function getAdminSummary(): Promise<AdminSummary> {
     commissionEarnedPaise: Number(bookings?.commission ?? 0),
     refundedPaise: Number(bookings?.refunded ?? 0),
     pendingRefunds: Number(refunds?.pending ?? 0),
+    pendingCoupons: Number(refunds?.pending_coupons ?? 0),
   };
 }
 

@@ -18,10 +18,12 @@ import {
 import { api, ApiError, downloadFile } from '@/lib/api';
 import type { BookingDetail, TicketView } from '@/lib/types';
 import { RequireAuth } from '@/components/auth/require-auth';
+import { AddToCalendar } from '@/components/events/add-to-calendar';
 import { useToast } from '@/components/ui/toast';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Alert, Field, Skeleton, StatusBadge, Textarea } from '@/components/ui/index';
 import { formatDateTime, formatEventDateTime, formatMoney } from '@/lib/format';
+
 
 export default function BookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -160,8 +162,10 @@ function BookingView({ bookingId }: { bookingId: string }) {
               {tickets.map((ticket, index) => (
                 <article
                   key={ticket.id}
-                  className="print-break overflow-hidden rounded-xl border border-ink-200 bg-white shadow-card"
+                  className="ticket print-break animate-enter"
+                  style={{ animationDelay: `${index * 60}ms` }}
                 >
+                  {/* Header band, styled like the printed stub's brand bar. */}
                   <div className="flex items-center justify-between bg-ink-950 px-5 py-3">
                     <span className="text-sm font-bold text-white">
                       Ticket {index + 1} of {tickets.length}
@@ -169,18 +173,14 @@ function BookingView({ bookingId }: { bookingId: string }) {
                     <span className="font-mono text-xs text-ink-300">{ticket.ticketCode}</span>
                   </div>
 
-                  <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center">
-                    <div className="shrink-0 text-center">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={ticket.qrDataUrl}
-                        alt={`QR code for ticket ${ticket.ticketCode}`}
-                        className="mx-auto h-40 w-40 rounded-lg border border-ink-200"
-                      />
-                      <p className="mt-2 text-xs text-ink-500">Scan at the entrance</p>
-                    </div>
+                  {/* Main body: the details half of the ticket. */}
+                  <div className="p-5">
+                    <p className="text-lg font-bold leading-tight text-ink-900">{booking.event.title}</p>
+                    <p className="mt-0.5 text-xs text-ink-500">
+                      {formatEventDateTime(booking.event.startsAt)} · {booking.event.venueName}
+                    </p>
 
-                    <dl className="min-w-0 flex-1 space-y-2.5">
+                    <dl className="mt-4 grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
                       <Detail label="Attendee" value={ticket.attendeeName} />
                       <Detail label="Ticket type" value={ticket.ticketTypeName} />
                       <Detail label="Booking ID" value={<span className="font-mono">{ticket.bookingCode}</span>} />
@@ -191,7 +191,6 @@ function BookingView({ bookingId }: { bookingId: string }) {
                             <span className="inline-flex items-center gap-1 font-semibold text-sky-700">
                               <CheckCircle2 className="h-3.5 w-3.5" />
                               Checked in
-                              {ticket.checkedInAt && ` · ${formatDateTime(ticket.checkedInAt)}`}
                             </span>
                           ) : ticket.status === 'valid' ? (
                             <span className="font-semibold text-emerald-700">Valid</span>
@@ -204,6 +203,44 @@ function BookingView({ bookingId }: { bookingId: string }) {
                         }
                       />
                     </dl>
+
+                    {ticket.checkedInAt && (
+                      <p className="mt-3 text-xs text-ink-500">
+                        Checked in at {formatDateTime(ticket.checkedInAt)}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* The tear line, with a notch punched out of each edge. */}
+                  <div className="ticket-perforation px-4">
+                    <span className="ticket-tear" />
+                  </div>
+
+                  {/* The stub: the part torn off and scanned at the gate. */}
+                  <div className="ticket-stub flex flex-col items-center gap-4 p-5 sm:flex-row sm:items-center">
+                    <div className="shrink-0 rounded-lg bg-white p-2 shadow-sm ring-1 ring-ink-200">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={ticket.qrDataUrl}
+                        alt={`QR code for ticket ${ticket.ticketCode}`}
+                        className="h-36 w-36"
+                      />
+                    </div>
+
+                    <div className="min-w-0 flex-1 text-center sm:text-left">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Admit one</p>
+                      <p className="mt-1 font-mono text-lg font-bold tracking-tight text-ink-900">
+                        {ticket.ticketCode}
+                      </p>
+                      <p className="mt-2 text-xs leading-relaxed text-ink-500">
+                        Show this QR code at the entrance. It works once — don&apos;t share a screenshot.
+                      </p>
+                      {ticket.seatLabel && (
+                        <p className="mt-2 inline-block rounded-md bg-white px-2 py-1 text-xs font-medium text-ink-700 ring-1 ring-ink-200">
+                          {ticket.seatLabel}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </article>
               ))}
@@ -224,6 +261,18 @@ function BookingView({ bookingId }: { bookingId: string }) {
                   <Download className="h-4 w-4" />
                   Download PDF
                 </Button>
+                {/* Placed with the ticket actions: this is the moment someone
+                    has just booked and is most likely to save the date. */}
+                <AddToCalendar
+                  event={{
+                    title: booking.event.title,
+                    description: `Booking ${booking.bookingCode} · ${booking.quantity} ticket(s)`,
+                    location: `${booking.event.venueName}, ${booking.event.addressLine1}, ${booking.event.cityName}`,
+                    startsAt: booking.event.startsAt,
+                    endsAt: booking.event.endsAt,
+                  }}
+                  filename={`evento-${booking.bookingCode}.ics`}
+                />
                 <Button variant="outline" onClick={() => window.print()}>
                   <Printer className="h-4 w-4" />
                   Print
@@ -353,9 +402,9 @@ function BookingView({ bookingId }: { bookingId: string }) {
 
 function Detail({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between gap-3 border-b border-ink-100 pb-2 last:border-0">
-      <dt className="text-xs uppercase tracking-wide text-ink-500">{label}</dt>
-      <dd className="text-right text-sm font-medium text-ink-900">{value}</dd>
+    <div>
+      <dt className="text-[11px] uppercase tracking-wide text-ink-500">{label}</dt>
+      <dd className="mt-0.5 text-sm font-medium text-ink-900">{value}</dd>
     </div>
   );
 }

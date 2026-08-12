@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { loadRazorpay, openCheckout } from '@/lib/razorpay';
-import type { CheckoutSession, CreatedBooking, EventDetail, PriceBreakdown } from '@/lib/types';
+import type { AvailableCoupon, CheckoutSession, CreatedBooking, EventDetail, PriceBreakdown } from '@/lib/types';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
@@ -75,19 +75,22 @@ function CheckoutFlow() {
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const [offers, setOffers] = useState<AvailableCoupon[]>([]);
 
   const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '' });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [booking, setBooking] = useState<CreatedBooking | null>(null);
   const [holdSecondsLeft, setHoldSecondsLeft] = useState<number | null>(null);
 
-  // Guests cannot check out; bounce them to sign-in and back.
-  useEffect(() => {
-    if (!authLoading && !user) {
-      const next = `/checkout?event=${eventSlug}&t=${encodeURIComponent(selectionParam)}`;
-      router.replace(`/auth/login?next=${encodeURIComponent(next)}`);
-    }
-  }, [authLoading, user, router, eventSlug, selectionParam]);
+  /**
+   * Where to send a guest to sign in, returning them to this exact cart.
+   * Deliberately not triggered on mount — guests are allowed to see the full
+   * order summary and total first, and are only asked to sign in when they
+   * actually press Pay.
+   */
+  const loginHref = `/auth/login?next=${encodeURIComponent(
+    `/checkout?event=${eventSlug}&t=${encodeURIComponent(selectionParam)}`,
+  )}`;
 
   useEffect(() => {
     if (user) {
@@ -106,6 +109,12 @@ function CheckoutFlow() {
       try {
         const eventResponse = await api.get<EventDetail>(`/events/${eventSlug}`);
         setEvent(eventResponse.data);
+
+        // Nobody guesses a promo code, so show what is actually usable here.
+        api
+          .get<AvailableCoupon[]>(`/events/${eventResponse.data.id}/coupons`)
+          .then((response) => setOffers(response.data))
+          .catch(() => setOffers([]));
 
         const { data } = await api.post<PriceBreakdown>('/bookings/quote', {
           eventId: eventResponse.data.id,
@@ -133,9 +142,10 @@ function CheckoutFlow() {
     [eventSlug, items],
   );
 
+  // Quoting is open to guests, so this no longer waits for a signed-in user.
   useEffect(() => {
-    if (user) void loadQuote();
-  }, [user, loadQuote]);
+    void loadQuote();
+  }, [loadQuote]);
 
   // Countdown on the inventory hold, so the customer knows the clock is running.
   useEffect(() => {
@@ -189,6 +199,14 @@ function CheckoutFlow() {
    */
   async function handlePay() {
     if (!event || !validate()) return;
+
+    // The sign-in gate sits here rather than on page load, so a guest can pick
+    // tickets, apply a coupon and see the real total before committing.
+    if (!user) {
+      router.push(loginHref);
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -382,7 +400,61 @@ function CheckoutFlow() {
                   </Button>
                 </div>
                 {couponError && <p className="mt-2 text-xs text-rose-600">{couponError}</p>}
-                <p className="mt-2 text-xs text-ink-500">Try WELCOME10 for 10% off your first booking</p>
+
+                {/* Available offers, so nobody has to already know a code. */}
+                {offers.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                      Available offers
+                    </p>
+                    <ul className="mt-2 space-y-2">
+                      {offers.map((offer) => {
+                        const subtotal = quote?.subtotalPaise ?? 0;
+                        const shortfall = offer.minOrderPaise - subtotal;
+                        const eligible = shortfall <= 0;
+
+                        return (
+                          <li
+                            key={offer.code}
+                            className={cn(
+                              'flex items-center justify-between gap-3 rounded-lg border border-dashed p-3 transition',
+                              eligible ? 'border-brand-300 bg-brand-50/50' : 'border-ink-200 bg-ink-50',
+                            )}
+                          >
+                            <div className="min-w-0">
+                              <p className="flex items-center gap-2">
+                                <span className="font-mono text-sm font-bold text-ink-900">{offer.code}</span>
+                                <span className="text-xs font-medium text-brand-700">{offer.label}</span>
+                              </p>
+                              {!eligible && (
+                                <p className="mt-0.5 text-xs text-ink-500">
+                                  Add {formatMoney(shortfall)} more to use this
+                                </p>
+                              )}
+                              {eligible && offer.description && (
+                                <p className="mt-0.5 truncate text-xs text-ink-500">{offer.description}</p>
+                              )}
+                            </div>
+
+                            <Button
+                              size="sm"
+                              variant={eligible ? 'primary' : 'ghost'}
+                              disabled={!eligible || applyingCoupon}
+                              onClick={() => {
+                                setCouponInput(offer.code);
+                                setApplyingCoupon(true);
+                                setCouponError(null);
+                                void loadQuote(offer.code);
+                              }}
+                            >
+                              Apply
+                            </Button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -479,8 +551,18 @@ function CheckoutFlow() {
                 loading={submitting}
                 disabled={submitting || step === 'done'}
               >
-                {step === 'paying' ? 'Completing payment…' : `Pay ${formatMoney(quote?.totalPaise ?? 0)}`}
+                {step === 'paying'
+                  ? 'Completing payment…'
+                  : !user
+                    ? `Sign in to pay ${formatMoney(quote?.totalPaise ?? 0)}`
+                    : `Pay ${formatMoney(quote?.totalPaise ?? 0)}`}
               </Button>
+
+              {!user && (
+                <p className="mt-2 text-center text-xs text-ink-500">
+                  You&apos;ll come straight back here — your tickets are kept.
+                </p>
+              )}
 
               <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-ink-500">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" aria-hidden />

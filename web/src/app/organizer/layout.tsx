@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { BarChart3, CalendarDays, LayoutDashboard, QrCode, Settings, Ticket } from 'lucide-react';
+import { BarChart3, CalendarDays, LayoutDashboard, QrCode, Settings, Tag, Ticket } from 'lucide-react';
 import { RequireAuth } from '@/components/auth/require-auth';
 import { DashboardShell, type NavItem } from '@/components/dashboard/shell';
 import { useAuth } from '@/components/providers/auth-provider';
@@ -11,6 +11,7 @@ const NAV: NavItem[] = [
   { href: '/organizer', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/organizer/events', label: 'My Events', icon: CalendarDays },
   { href: '/organizer/bookings', label: 'Bookings', icon: Ticket },
+  { href: '/organizer/coupons', label: 'Coupons', icon: Tag },
   { href: '/organizer/scan', label: 'Scan Tickets', icon: QrCode },
   { href: '/organizer/reports', label: 'Reports', icon: BarChart3 },
   { href: '/organizer/settings', label: 'Settings', icon: Settings },
