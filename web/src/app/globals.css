@@ -81,6 +81,72 @@
            bg-gradient-to-r from-transparent via-white/60 to-transparent;
     content: '';
   }
+
+  /* ── Physical ticket ──────────────────────────────────────────
+     Mirrors the printed PDF: a stub separated by a perforation, with
+     semicircular notches punched out of both edges where it tears.
+     The notches are background circles rather than clip-path so the
+     card keeps its border and shadow.                             */
+  .ticket {
+    @apply relative overflow-hidden rounded-xl bg-white shadow-card
+           ring-1 ring-ink-200;
+  }
+
+  /* The tear line, plus a notch punched into each side of it. */
+  .ticket-perforation {
+    @apply relative flex items-center;
+  }
+  .ticket-perforation::before,
+  .ticket-perforation::after {
+    @apply absolute block h-5 w-5 rounded-full bg-ink-50 ring-1 ring-ink-200;
+    content: '';
+  }
+  .ticket-perforation::before {
+    left: -0.625rem;
+    /* Hide the ring on the side facing into the card. */
+    clip-path: inset(0 0 0 50%);
+  }
+  .ticket-perforation::after {
+    right: -0.625rem;
+    clip-path: inset(0 50% 0 0);
+  }
+
+  .ticket-tear {
+    @apply h-px flex-1;
+    background-image: linear-gradient(to right, theme('colors.ink.300') 0 6px, transparent 6px 12px);
+    background-size: 12px 1px;
+    background-repeat: repeat-x;
+  }
+
+  /* Faint diagonal weave so the stub reads as paper, not a plain div. */
+  .ticket-stub {
+    @apply bg-ink-50;
+    background-image: repeating-linear-gradient(
+      45deg,
+      theme('colors.ink.100') 0 1px,
+      transparent 1px 8px
+    );
+  }
+
+  .press {
+    @apply transition-transform duration-150 active:scale-[0.97];
+  }
+}
+
+/*
+ * Honour a reduced-motion preference. Vestibular disorders make large or
+ * repeated movement genuinely unpleasant, so animation collapses to a near
+ * instant state change rather than being merely shortened.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* The ticket page is designed to be printed or saved as PDF from the browser. */

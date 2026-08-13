@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { authenticate, currentUser } from '../../middleware/auth';
+import { authenticate, currentUser, optionalAuth } from '../../middleware/auth';
 import { bookingLimiter } from '../../middleware/rateLimit';
 import { validate } from '../../middleware/validate';
 import { asyncHandler, buildPageMeta, ok, paginated } from '../../utils/http';
@@ -17,17 +17,27 @@ import {
 } from './booking.schema';
 
 const router = Router();
-router.use(authenticate);
 
-/** Price a cart without reserving inventory. */
+/**
+ * Price a cart without reserving inventory.
+ *
+ * Deliberately open to guests: making someone create an account before they
+ * can even see the total is the single largest drop-off in a ticketing funnel.
+ * Quoting mutates nothing, and the authoritative re-check happens when the
+ * booking is actually created.
+ */
 router.post(
   '/quote',
+  optionalAuth,
   validate({ body: quoteSchema }),
   asyncHandler(async (req, res) => {
-    const quote = await bookingService.quoteBooking(req.body, currentUser(req).id);
+    const quote = await bookingService.quoteBooking(req.body, req.user?.id ?? null);
     return ok(res, quote);
   }),
 );
+
+// Everything below this line requires a signed-in user.
+router.use(authenticate);
 
 /** Reserve inventory and create a pending booking. */
 router.post(

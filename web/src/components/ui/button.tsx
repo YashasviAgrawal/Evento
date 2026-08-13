@@ -25,8 +25,11 @@ const SIZES: Record<Size, string> = {
 };
 
 const BASE =
-  'inline-flex items-center justify-center rounded-lg font-medium transition-colors ' +
-  'disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap';
+  'inline-flex items-center justify-center rounded-lg font-medium whitespace-nowrap ' +
+  // A brief scale-down on press gives the tactile confirmation a colour change
+  // alone does not, and matters most on touch where there is no hover state.
+  'transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-smooth ' +
+  'active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 disabled:active:scale-100';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;

@@ -5,6 +5,7 @@ import { AuthProvider } from '@/components/providers/auth-provider';
 import { ToastProvider } from '@/components/ui/toast';
 import { Navbar } from '@/components/layout/navbar';
 import { Footer } from '@/components/layout/footer';
+import { PageTransition } from '@/components/layout/page-transition';
 
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME ?? 'Evento';
 
@@ -42,7 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Suspense fallback={<div className="h-16 border-b border-ink-200 bg-white" />}>
               <Navbar />
             </Suspense>
-            <main className="flex-1">{children}</main>
+            <PageTransition>{children}</PageTransition>
             <Footer />
           </AuthProvider>
         </ToastProvider>

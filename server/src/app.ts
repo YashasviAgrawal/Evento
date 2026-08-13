@@ -17,6 +17,7 @@ import bookingRoutes from './modules/bookings/booking.routes';
 import paymentRoutes from './modules/payments/payment.routes';
 import ticketRoutes from './modules/tickets/ticket.routes';
 import organizerRoutes from './modules/organizer/organizer.routes';
+import organizerCouponRoutes from './modules/coupons/organizer-coupon.routes';
 import adminRoutes from './modules/admin/admin.routes';
 import uploadRoutes, { uploadDir } from './modules/uploads/upload.routes';
 
@@ -130,6 +131,7 @@ export function createApp(): Express {
   api.use('/payments', paymentRoutes);
   api.use('/tickets', ticketRoutes);
   api.use('/organizer/events', organizerEventRoutes);
+  api.use('/organizer/coupons', organizerCouponRoutes);
   api.use('/organizer', organizerRoutes);
   api.use('/admin', adminRoutes);
   api.use('/uploads', uploadRoutes);

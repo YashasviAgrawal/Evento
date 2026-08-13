@@ -39,8 +39,10 @@ export interface PricingRates {
  *   subtotal  →  minus coupon discount  →  taxable base
  *   tax and convenience fee are charged on the taxable base (post-discount),
  *   which is what Indian GST rules require for a discounted sale.
- *   Commission is the platform's cut of net ticket revenue and is excluded
- *   from tax/fee, since those are not the organizer's earnings.
+ *
+ * Commission is charged on the FULL pre-discount subtotal, not the discounted
+ * base. A coupon is the organizer's marketing decision, so the organizer bears
+ * its whole cost and platform revenue is unaffected by their promotions.
  */
 export function calculatePricing(
   lines: PriceLine[],
@@ -57,7 +59,17 @@ export function calculatePricing(
   const convenienceFeePaise = percentOf(taxablePaise, rates.convenienceFeePercent);
   const totalPaise = taxablePaise + taxPaise + convenienceFeePaise;
 
-  const commissionPaise = percentOf(taxablePaise, rates.commissionPercent);
+  /*
+   * Commission is on the full subtotal, but it can never exceed the money
+   * actually collected. With steep discounts allowed, a 95%-off coupon on a
+   * ₹1,000 ticket collects ₹50 while 10% of the original is ₹100 — charging
+   * that would mean an impossible negative payout, which the
+   * organizer_payout_paise >= 0 constraint would reject outright.
+   *
+   * So the platform takes its full cut where the revenue covers it, and at
+   * most the whole collected amount where it does not.
+   */
+  const commissionPaise = Math.min(percentOf(subtotalPaise, rates.commissionPercent), taxablePaise);
   const organizerPayoutPaise = taxablePaise - commissionPaise;
 
   return {

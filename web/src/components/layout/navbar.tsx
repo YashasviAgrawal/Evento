@@ -2,20 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   CalendarDays,
   ChevronDown,
   LayoutDashboard,
   LogOut,
   Menu,
-  Search,
   Shield,
   Ticket,
   User as UserIcon,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/components/providers/auth-provider';
+import { SearchBox } from '@/components/search/search-box';
 import { useMounted } from '@/lib/use-mounted';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { cn, initials } from '@/lib/format';
@@ -34,11 +34,9 @@ export function Navbar() {
   const mounted = useMounted();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const router = useRouter();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [search, setSearch] = useState(searchParams.get('q') ?? '');
   const accountRef = useRef<HTMLDivElement>(null);
 
   // Close the account dropdown on an outside click or Escape.
@@ -63,12 +61,6 @@ export function Navbar() {
     setAccountOpen(false);
   }, [pathname]);
 
-  function submitSearch(event: React.FormEvent) {
-    event.preventDefault();
-    const term = search.trim();
-    router.push(term ? `/events?q=${encodeURIComponent(term)}` : '/events');
-  }
-
   const dashboardHref = user?.role === 'admin' ? '/admin' : user?.role === 'organizer' ? '/organizer' : null;
 
   return (
@@ -82,18 +74,13 @@ export function Navbar() {
             <span className="text-lg font-extrabold tracking-tight text-ink-900">Evento</span>
           </Link>
 
-          <form onSubmit={submitSearch} className="hidden min-w-0 flex-1 md:block" role="search">
-            <div className="relative max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search events, artists, venues…"
-                aria-label="Search events"
-                className="input pl-9"
-              />
-            </div>
-          </form>
+          <div className="hidden min-w-0 flex-1 md:block">
+            <SearchBox
+              className="max-w-md"
+              placeholder="Search events, artists, venues…"
+              initialValue={searchParams.get('q') ?? ''}
+            />
+          </div>
 
           <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">
             {NAV_LINKS.map((link) => (
@@ -195,18 +182,13 @@ export function Navbar() {
 
         {menuOpen && (
           <div className="animate-fade-up border-t border-ink-200 py-3 lg:hidden">
-            <form onSubmit={submitSearch} className="mb-3 md:hidden" role="search">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search events…"
-                  aria-label="Search events"
-                  className="input pl-9"
-                />
-              </div>
-            </form>
+            <div className="mb-3 md:hidden">
+              <SearchBox
+                placeholder="Search events…"
+                initialValue={searchParams.get('q') ?? ''}
+                onNavigate={() => setMenuOpen(false)}
+              />
+            </div>
             <nav className="grid gap-0.5" aria-label="Mobile">
               {NAV_LINKS.map((link) => (
                 <Link

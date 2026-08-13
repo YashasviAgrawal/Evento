@@ -53,17 +53,32 @@ export default async function HomePage() {
             <Link
               key={category.id}
               href={`/events?category=${category.slug}`}
-              className="group flex flex-col items-center gap-3 rounded-xl border border-ink-200 bg-white p-5 text-center shadow-card transition hover:-translate-y-0.5 hover:border-transparent hover:shadow-lift"
+              className="group relative aspect-[4/5] overflow-hidden rounded-xl bg-ink-800 shadow-card transition-all duration-300 ease-smooth hover:-translate-y-1 hover:shadow-lift active:translate-y-0 active:scale-[0.99] sm:aspect-[4/3]"
             >
-              <span
-                className="grid h-12 w-12 place-items-center rounded-xl transition group-hover:scale-110"
-                style={{ backgroundColor: `${category.color}18`, color: category.color }}
-              >
-                <CategoryIcon name={category.icon} className="h-6 w-6" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-ink-900">{category.name}</p>
-                <p className="mt-0.5 text-xs text-ink-500">
+              {category.imageUrl && (
+                <Image
+                  src={category.imageUrl}
+                  alt=""
+                  fill
+                  sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 20vw"
+                  className="object-cover transition-transform duration-500 ease-smooth group-hover:scale-110"
+                />
+              )}
+
+              {/* Category colour wash keeps the rail cohesive across ten
+                  different photographs. */}
+              <div
+                className="absolute inset-0 opacity-60 transition-opacity duration-300 group-hover:opacity-40"
+                style={{ backgroundColor: category.color }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-ink-950/90 via-ink-950/30 to-transparent" />
+
+              <div className="absolute inset-x-0 bottom-0 p-3">
+                <span className="mb-1.5 inline-grid h-8 w-8 place-items-center rounded-lg bg-white/20 text-white backdrop-blur-sm transition-transform duration-300 group-hover:scale-110">
+                  <CategoryIcon name={category.icon} className="h-4 w-4" />
+                </span>
+                <p className="text-sm font-bold leading-tight text-white">{category.name}</p>
+                <p className="mt-0.5 text-xs text-white/70">
                   {category.eventCount ?? 0} {category.eventCount === 1 ? 'event' : 'events'}
                 </p>
               </div>

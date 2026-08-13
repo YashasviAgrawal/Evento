@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { CalendarDays, MapPin, Search, TicketCheck } from 'lucide-react';
 import type { City } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import { SearchBox } from '@/components/search/search-box';
 
 const QUICK_FILTERS = [
   { label: 'Today', href: '/events?when=today' },
@@ -20,14 +21,19 @@ export function Hero({ cities, stats }: { cities: City[]; stats: { events: numbe
   const [city, setCity] = useState('');
   const [when, setWhen] = useState('');
 
-  function submit(event: React.FormEvent) {
-    event.preventDefault();
+  /** Combined search: free text plus the city and date pickers beside it. */
+  function runSearch(term = query) {
     const params = new URLSearchParams();
-    if (query.trim()) params.set('q', query.trim());
+    if (term.trim()) params.set('q', term.trim());
     if (city) params.set('city', city);
     if (when) params.set('when', when);
     const qs = params.toString();
     router.push(qs ? `/events?${qs}` : '/events');
+  }
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    runSearch();
   }
 
   return (
@@ -66,13 +72,18 @@ export function Hero({ cities, stats }: { cities: City[]; stats: { events: numbe
         >
           <div className="flex flex-col gap-2 md:flex-row">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-ink-400" aria-hidden />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4.5 w-4.5 -translate-y-1/2 text-ink-400" aria-hidden />
+              <SearchBox
                 placeholder="Search events, artists or venues"
-                aria-label="Search events"
-                className="h-12 w-full rounded-lg border-0 bg-transparent pl-11 pr-3 text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none focus:ring-0"
+                initialValue={query}
+                renderIcon={false}
+                inputClassName="h-12 w-full rounded-lg border-0 bg-transparent pl-11 pr-9 text-sm text-ink-900 shadow-none placeholder:text-ink-400 focus:border-0 focus:outline-none focus:ring-0"
+                // Enter runs the hero's combined search (text + city + date)
+                // rather than a bare keyword query.
+                onSubmit={(term) => {
+                  setQuery(term);
+                  runSearch(term);
+                }}
               />
             </div>
 

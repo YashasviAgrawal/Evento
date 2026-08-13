@@ -44,13 +44,36 @@ const config: Config = {
           from: { opacity: '0', transform: 'translateY(8px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
+        'fade-in': {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
+        // Page/section entrance: a shorter, softer version of fade-up so
+        // content settles rather than sliding in.
+        'enter': {
+          from: { opacity: '0', transform: 'translateY(6px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
         shimmer: {
           '100%': { transform: 'translateX(100%)' },
+        },
+        'pulse-ring': {
+          '0%': { transform: 'scale(0.95)', opacity: '0.7' },
+          '70%': { transform: 'scale(1.1)', opacity: '0' },
+          '100%': { transform: 'scale(1.1)', opacity: '0' },
         },
       },
       animation: {
         'fade-up': 'fade-up 0.35s ease-out both',
+        'fade-in': 'fade-in 0.25s ease-out both',
+        enter: 'enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) both',
         shimmer: 'shimmer 1.6s infinite',
+        'pulse-ring': 'pulse-ring 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      },
+      transitionTimingFunction: {
+        // A gentle overshoot-free ease that suits UI motion better than
+        // the default ease-in-out.
+        smooth: 'cubic-bezier(0.16, 1, 0.3, 1)',
       },
     },
   },

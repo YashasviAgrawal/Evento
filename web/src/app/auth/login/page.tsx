@@ -171,7 +171,18 @@ function LoginForm() {
                 />
               </Field>
 
-              <Field label="Password" required>
+              <div>
+                <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                  <label className="text-sm font-medium text-ink-700">
+                    Password<span className="ml-0.5 text-brand-600">*</span>
+                  </label>
+                  <Link
+                    href="/auth/forgot-password"
+                    className="text-xs font-medium text-brand-600 hover:text-brand-700"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <Input
                   type="password"
                   value={password}
@@ -180,7 +191,7 @@ function LoginForm() {
                   autoComplete="current-password"
                   required
                 />
-              </Field>
+              </div>
 
               <Button type="submit" size="lg" className="w-full" loading={loading}>
                 Sign in

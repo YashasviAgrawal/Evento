@@ -11,7 +11,7 @@ export function EventCard({ event, priority = false }: { event: EventCardType; p
   return (
     <Link
       href={`/events/${event.slug}`}
-      className="group flex h-full flex-col overflow-hidden rounded-xl border border-ink-200 bg-white shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-lift"
+      className="group flex h-full flex-col overflow-hidden rounded-xl border border-ink-200 bg-white shadow-card transition-all duration-300 ease-smooth hover:-translate-y-1 hover:border-brand-200 hover:shadow-lift active:translate-y-0 active:scale-[0.99]"
     >
       <div className="relative aspect-[16/10] overflow-hidden bg-ink-100">
         <Image
@@ -20,7 +20,11 @@ export function EventCard({ event, priority = false }: { event: EventCardType; p
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
           priority={priority}
-          className="object-cover transition duration-500 group-hover:scale-105"
+          // A tiny blurred stand-in means the card never flashes an empty grey
+          // box — the image resolves into place instead of popping in.
+          placeholder="blur"
+          blurDataURL={FALLBACK_IMAGE}
+          className="object-cover transition-transform duration-500 ease-smooth group-hover:scale-105"
         />
 
         <div className="absolute left-3 top-3 flex gap-1.5">
