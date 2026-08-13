@@ -36,6 +36,7 @@ const COLUMNS = [
       { href: '/about', label: 'About' },
       { href: '/terms', label: 'Terms of Service' },
       { href: '/privacy', label: 'Privacy Policy' },
+      { href: '/refund', label: 'Refund Policy' },
       { href: '/support', label: 'Help & Support' },
     ],
   },
