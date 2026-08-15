@@ -99,7 +99,7 @@ export function openCheckout(
       key: session.keyId,
       amount: session.amountPaise,
       currency: session.currency,
-      name: 'Evento',
+      name: 'Tixit',
       description: session.eventTitle,
       order_id: session.orderId,
       prefill: session.prefill,

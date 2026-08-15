@@ -184,7 +184,7 @@ export default async function HomePage() {
         <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 px-6 py-12 text-center sm:px-12">
           <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Running an event?</h2>
           <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-brand-100 sm:text-base">
-            List it on Evento in minutes. Set up ticket tiers, track sales in real time, and scan QR tickets at the
+            List it on Tixit in minutes. Set up ticket tiers, track sales in real time, and scan QR tickets at the
             door — all from one dashboard.
           </p>
           <div className="mt-7 flex flex-wrap justify-center gap-3">

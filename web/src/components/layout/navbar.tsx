@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
@@ -10,7 +11,6 @@ import {
   LogOut,
   Menu,
   Shield,
-  Ticket,
   User as UserIcon,
   X,
 } from 'lucide-react';
@@ -67,11 +67,8 @@ export function Navbar() {
     <header className="sticky top-0 z-50 border-b border-ink-200 bg-white/90 backdrop-blur-md">
       <div className="container-page">
         <div className="flex h-16 items-center gap-4">
-          <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="Evento home">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-white">
-              <Ticket className="h-4.5 w-4.5" strokeWidth={2.5} />
-            </span>
-            <span className="text-lg font-extrabold tracking-tight text-ink-900">Evento</span>
+          <Link href="/" className="flex shrink-0 items-center" aria-label="Tixit home">
+            <Image src="/brand/wordmark-white.png" alt="Tixit" width={624} height={260} className="h-8 w-auto" priority />
           </Link>
 
           <div className="hidden min-w-0 flex-1 md:block">

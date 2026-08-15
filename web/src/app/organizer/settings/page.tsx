@@ -204,7 +204,7 @@ export default function OrganizerSettingsPage() {
         <section className="rounded-xl border border-ink-200 bg-white p-5 shadow-card sm:p-6">
           <h2 className="mb-1 text-base font-bold text-ink-900">Commission</h2>
           <p className="text-xs text-ink-500">
-            The platform fee deducted from your ticket revenue. Set by the Evento team.
+            The platform fee deducted from your ticket revenue. Set by the Tixit team.
           </p>
           <p className="mt-3 text-2xl font-extrabold text-ink-900">
             {profile.commissionPercent === null ? 'Platform default' : `${profile.commissionPercent}%`}

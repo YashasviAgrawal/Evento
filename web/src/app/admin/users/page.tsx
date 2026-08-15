@@ -83,7 +83,7 @@ export default function AdminUsersPage() {
 
   return (
     <div>
-      <PageHeader title="Users" description="Everyone with an Evento account" />
+      <PageHeader title="Users" description="Everyone with a Tixit account" />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <div className="relative">

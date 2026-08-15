@@ -46,7 +46,7 @@ export default function GlobalError({
           </div>
 
           <h1 style={{ margin: '20px 0 0', fontSize: '20px', fontWeight: 700, color: '#0f172a' }}>
-            Evento couldn&apos;t load
+            Tixit couldn&apos;t load
           </h1>
           <p style={{ margin: '8px 0 0', fontSize: '14px', lineHeight: 1.6, color: '#64748b' }}>
             Something went wrong while starting the page. Reloading usually fixes it.
