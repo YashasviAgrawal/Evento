@@ -1,5 +1,6 @@
+import Image from 'next/image';
 import Link from 'next/link';
-import { Facebook, Instagram, Mail, MapPin, Phone, Ticket, Twitter } from 'lucide-react';
+import { Facebook, Instagram, Mail, MapPin, Phone, Twitter } from 'lucide-react';
 
 const COLUMNS = [
   {
@@ -49,19 +50,23 @@ export function Footer() {
       <div className="container-page py-14">
         <div className="grid gap-10 lg:grid-cols-6">
           <div className="lg:col-span-2">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-white">
-                <Ticket className="h-4.5 w-4.5" strokeWidth={2.5} />
-              </span>
-              <span className="text-lg font-extrabold tracking-tight text-white">Evento</span>
+            <Link href="/" className="flex items-center">
+              <Image
+                src="/brand/lockup-black.png"
+                alt="Tixit — Find Your Moment"
+                width={760}
+                height={419}
+                className="h-14 w-auto"
+              />
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink-400">
-              Discover concerts, comedy nights, workshops and sport across India — and book your seat in a single tap.
+              Discover movies, events, concerts, comedy shows, sports and more — and book your seat in a single tap
+              with an instant digital QR ticket.
             </p>
 
             <div className="mt-5 space-y-2 text-sm text-ink-400">
               <p className="flex items-center gap-2">
-                <Mail className="h-4 w-4 shrink-0" aria-hidden /> support@evento.test
+                <Mail className="h-4 w-4 shrink-0" aria-hidden /> support@tixit.test
               </p>
               <p className="flex items-center gap-2">
                 <Phone className="h-4 w-4 shrink-0" aria-hidden /> +91 80 4718 2200
@@ -120,7 +125,7 @@ export function Footer() {
         </div>
 
         <div className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-ink-800 pt-6 sm:flex-row">
-          <p className="text-xs text-ink-500">© {new Date().getFullYear()} Evento. All rights reserved.</p>
+          <p className="text-xs text-ink-500">© {new Date().getFullYear()} Tixit. All rights reserved.</p>
           <p className="text-xs text-ink-500">Payments secured by Razorpay · UPI · Cards · Net Banking</p>
         </div>
       </div>

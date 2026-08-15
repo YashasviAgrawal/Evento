@@ -109,7 +109,7 @@ function LoginForm() {
       <div className="w-full max-w-md">
         <Link href="/" className="mb-6 inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-800">
           <ArrowLeft className="h-4 w-4" />
-          Back to Evento
+          Back to Tixit
         </Link>
 
         <div className="rounded-2xl border border-ink-200 bg-white p-7 shadow-card">
@@ -245,7 +245,7 @@ function LoginForm() {
           )}
 
           <p className="mt-6 text-center text-sm text-ink-500">
-            New to Evento?{' '}
+            New to Tixit?{' '}
             <Link
               href={`/auth/register${next ? `?next=${encodeURIComponent(next)}` : ''}`}
               className="font-semibold text-brand-600 hover:text-brand-700"

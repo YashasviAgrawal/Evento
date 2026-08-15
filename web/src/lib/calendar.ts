@@ -50,7 +50,7 @@ export function buildIcs(event: CalendarEvent): string {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Evento//Ticket//EN',
+    'PRODID:-//Tixit//Ticket//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
