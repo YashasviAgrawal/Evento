@@ -5,6 +5,7 @@ import { LegalList, LegalPage, LegalSection } from '@/components/legal/legal-pag
 export const metadata: Metadata = {
   title: 'Refund Policy',
   description: 'When ticket purchases on Tixit are eligible for a refund, and how to request one.',
+  alternates: { canonical: '/refunds' },
 };
 
 export default function RefundPolicyPage() {

@@ -2,59 +2,86 @@ import { asyncHandler, buildPageMeta, ok, paginated } from '../../utils/http';
 import { currentOrganizerId, currentUser } from '../../middleware/auth';
 import { audit } from '../../services/audit.service';
 import { query, queryOne } from '../../db/pool';
+import { cached, invalidateCache } from '../../utils/cache';
 import { listAvailableCoupons } from '../coupons/coupon.service';
 import * as eventService from './event.service';
 
 /* ─────────────────────────── public ───────────────────────────── */
 
+// Home feed, listings and event detail are read on nearly every page view
+// but only change on organizer/admin writes, which all call
+// invalidateCache('events:') below — so a short TTL here removes repeated
+// remote-Postgres round trips without risking noticeably stale pages.
+const LIST_CACHE_TTL_MS = 15_000;
+const HOME_CACHE_TTL_MS = 30_000;
+const DETAIL_CACHE_TTL_MS = 20_000;
+
 export const listEvents = asyncHandler(async (req, res) => {
   const params = req.query as unknown as import('./event.schema').EventListQuery;
-  const { items, total } = await eventService.listPublicEvents(params);
+  const { items, total } = await cached(`events:list:${JSON.stringify(params)}`, LIST_CACHE_TTL_MS, () =>
+    eventService.listPublicEvents(params),
+  );
+  res.setHeader('Cache-Control', 'public, max-age=15');
   return paginated(res, items, buildPageMeta(params.page, params.limit, total));
 });
 
 export const homeFeed = asyncHandler(async (req, res) => {
   const city = typeof req.query.city === 'string' ? req.query.city : undefined;
-  const [sections, cities, categories] = await Promise.all([
-    eventService.getHomeSections(city),
-    query(
-      `SELECT id, name, slug, state, image_url, is_popular FROM cities
-        WHERE is_popular = true ORDER BY display_order ASC LIMIT 10`,
-    ),
-    query(
-      `SELECT c.id, c.name, c.slug, c.icon, c.color, c.image_url,
-              (SELECT count(*)::int FROM events e
-                WHERE e.category_id = c.id AND e.status = 'published' AND e.ends_at > now()) AS event_count
-         FROM categories c
-        WHERE c.is_active = true
-        ORDER BY c.display_order ASC`,
-    ),
-  ]);
 
-  return ok(res, {
-    ...sections,
-    popularCities: cities.rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      state: row.state,
-      imageUrl: row.image_url,
-    })),
-    categories: categories.rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      icon: row.icon,
-      color: row.color,
-      imageUrl: row.image_url,
-      eventCount: row.event_count,
-    })),
+  const body = await cached(`events:home:${city ?? 'all'}`, HOME_CACHE_TTL_MS, async () => {
+    const [sections, cities, categories] = await Promise.all([
+      eventService.getHomeSections(city),
+      query(
+        `SELECT id, name, slug, state, image_url, is_popular FROM cities
+          WHERE is_popular = true ORDER BY display_order ASC LIMIT 10`,
+      ),
+      query(
+        `SELECT c.id, c.name, c.slug, c.icon, c.color, c.image_url,
+                (SELECT count(*)::int FROM events e
+                  WHERE e.category_id = c.id AND e.status = 'published' AND e.ends_at > now()) AS event_count
+           FROM categories c
+          WHERE c.is_active = true
+          ORDER BY c.display_order ASC`,
+      ),
+    ]);
+
+    return {
+      ...sections,
+      popularCities: cities.rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        state: row.state,
+        imageUrl: row.image_url,
+      })),
+      categories: categories.rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        icon: row.icon,
+        color: row.color,
+        imageUrl: row.image_url,
+        eventCount: row.event_count,
+      })),
+    };
   });
+
+  res.setHeader('Cache-Control', 'public, max-age=30');
+  return ok(res, body);
 });
 
 export const getEvent = asyncHandler(async (req, res) => {
-  const event = await eventService.getEventBySlugOrId(req.params.slug, req.user);
+  // Only the anonymous, public view is cached: an organizer/admin viewer can
+  // see unpublished events (see getEventBySlugOrId's visibility check), and
+  // caching that under the plain identifier would leak a draft to the next
+  // anonymous visitor who hits the same slug within the TTL.
+  const event = req.user
+    ? await eventService.getEventBySlugOrId(req.params.slug, req.user)
+    : await cached(`events:detail:${req.params.slug}`, DETAIL_CACHE_TTL_MS, () =>
+        eventService.getEventBySlugOrId(req.params.slug),
+      );
   if (event.status === 'published') void eventService.incrementViewCount(event.id as string);
+  if (!req.user) res.setHeader('Cache-Control', 'public, max-age=20');
   return ok(res, event);
 });
 
@@ -146,6 +173,7 @@ export const suggest = asyncHandler(async (req, res) => {
 export const createEvent = asyncHandler(async (req, res) => {
   const organizerId = currentOrganizerId(req);
   const created = await eventService.createEvent(organizerId, req.body);
+  invalidateCache('events:');
   await audit({
     actorId: currentUser(req).id,
     actorRole: currentUser(req).role,
@@ -174,6 +202,7 @@ export const updateEvent = asyncHandler(async (req, res) => {
   const user = currentUser(req);
   const event = await eventService.assertEventOwnership(req.params.id, user);
   await eventService.updateEvent(req.params.id, event.organizer_id, req.body);
+  invalidateCache('events:');
   await audit({
     actorId: user.id,
     actorRole: user.role,
@@ -188,6 +217,7 @@ export const submitEvent = asyncHandler(async (req, res) => {
   const user = currentUser(req);
   await eventService.assertEventOwnership(req.params.id, user);
   const result = await eventService.submitForReview(req.params.id);
+  invalidateCache('events:');
   await audit({
     actorId: user.id,
     actorRole: user.role,
@@ -202,12 +232,14 @@ export const submitEvent = asyncHandler(async (req, res) => {
 export const pauseEvent = asyncHandler(async (req, res) => {
   await eventService.assertEventOwnership(req.params.id, currentUser(req));
   await eventService.pauseEvent(req.params.id);
+  invalidateCache('events:');
   return ok(res, { status: 'paused' });
 });
 
 export const resumeEvent = asyncHandler(async (req, res) => {
   await eventService.assertEventOwnership(req.params.id, currentUser(req));
   await eventService.resumeEvent(req.params.id);
+  invalidateCache('events:');
   return ok(res, { status: 'published' });
 });
 
@@ -215,6 +247,7 @@ export const deleteEvent = asyncHandler(async (req, res) => {
   const user = currentUser(req);
   await eventService.assertEventOwnership(req.params.id, user);
   await eventService.deleteEvent(req.params.id);
+  invalidateCache('events:');
   await audit({
     actorId: user.id,
     actorRole: user.role,
@@ -236,17 +269,20 @@ export const listTicketTypes = asyncHandler(async (req, res) => {
 export const addTicketType = asyncHandler(async (req, res) => {
   await eventService.assertEventOwnership(req.params.id, currentUser(req));
   const created = await eventService.addTicketType(req.params.id, req.body);
+  invalidateCache('events:');
   return ok(res, created, 201);
 });
 
 export const updateTicketType = asyncHandler(async (req, res) => {
   await eventService.assertEventOwnership(req.params.id, currentUser(req));
   await eventService.updateTicketType(req.params.ticketTypeId, req.params.id, req.body);
+  invalidateCache('events:');
   return ok(res, { message: 'Ticket type updated' });
 });
 
 export const deleteTicketType = asyncHandler(async (req, res) => {
   await eventService.assertEventOwnership(req.params.id, currentUser(req));
   await eventService.deleteTicketType(req.params.ticketTypeId, req.params.id);
+  invalidateCache('events:');
   return ok(res, { message: 'Ticket type deleted' });
 });

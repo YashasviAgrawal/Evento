@@ -14,6 +14,7 @@ import { env } from '../../config/env';
 import * as reportService from '../reports/report.service';
 import { processRefund } from '../payments/payment.service';
 import { cancelEvent } from '../events/event.service';
+import { invalidateCache } from '../../utils/cache';
 
 const router = Router();
 router.use(authenticate, requireAdmin);
@@ -177,6 +178,8 @@ router.post(
       [req.params.id, admin.id],
     );
     if (rows.length === 0) throw new ConflictError('This event is not awaiting approval', 'INVALID_TRANSITION');
+    invalidateCache('events:');
+    invalidateCache('catalog:');
 
     const event = rows[0]!;
     sendMailAsync({
@@ -220,6 +223,8 @@ router.post(
       [req.params.id, admin.id, req.body.reason],
     );
     if (rows.length === 0) throw new ConflictError('This event is not awaiting approval', 'INVALID_TRANSITION');
+    invalidateCache('events:');
+    invalidateCache('catalog:');
 
     const event = rows[0]!;
     sendMailAsync({
@@ -254,6 +259,7 @@ router.post(
       req.body.featured,
     ]);
     if (!rowCount) throw new NotFoundError('Event');
+    invalidateCache('events:');
     return ok(res, { isFeatured: req.body.featured });
   }),
 );
@@ -266,6 +272,8 @@ router.post(
   }),
   asyncHandler(async (req, res) => {
     await cancelEvent(req.params.id, req.body.reason);
+    invalidateCache('events:');
+    invalidateCache('catalog:');
     await audit({
       actorId: currentUser(req).id,
       actorRole: 'admin',

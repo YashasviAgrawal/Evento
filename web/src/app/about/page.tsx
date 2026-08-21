@@ -6,6 +6,13 @@ export const metadata: Metadata = {
   title: 'About Us',
   description:
     'Tixit is a modern ticketing and experiences platform, built to make discovering and booking movies, events, concerts, comedy shows and sports effortless.',
+  alternates: { canonical: '/about' },
+  openGraph: {
+    title: 'About Tixit',
+    description:
+      'Tixit is a modern ticketing and experiences platform, built to make discovering and booking movies, events, concerts, comedy shows and sports effortless.',
+    url: '/about',
+  },
 };
 
 const VALUES = [

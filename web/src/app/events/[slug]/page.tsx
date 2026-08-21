@@ -27,6 +27,8 @@ import { formatEventDate, formatEventDateTime, formatEventTime, formatNumber, pr
 
 export const revalidate = 20;
 
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3002').replace(/\/$/, '');
+
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
@@ -34,16 +36,29 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const event = await fetchPublic<EventDetail>(`/events/${slug}`);
-  if (!event) return { title: 'Event not found' };
+  if (!event) return { title: 'Event not found', robots: { index: false, follow: false } };
+
+  const description = event.subtitle ?? event.description.slice(0, 155);
+  const canonical = `/events/${event.slug}`;
+  const title = `${event.title} — ${formatEventDate(event.startsAt)}, ${event.city.name}`;
 
   return {
-    title: event.title,
-    description: event.subtitle ?? event.description.slice(0, 155),
+    title,
+    description,
+    keywords: [event.title, event.category.name, event.city.name, event.venue.name, ...event.tags],
+    alternates: { canonical },
     openGraph: {
       title: event.title,
-      description: event.subtitle ?? event.description.slice(0, 155),
-      images: event.bannerUrl ? [{ url: event.bannerUrl }] : undefined,
+      description,
+      url: canonical,
+      images: event.bannerUrl ? [{ url: event.bannerUrl, width: 1200, height: 630 }] : undefined,
       type: 'website',
+    },
+    twitter: {
+      card: event.bannerUrl ? 'summary_large_image' : 'summary',
+      title: event.title,
+      description,
+      images: event.bannerUrl ? [event.bannerUrl] : undefined,
     },
   };
 }
@@ -94,17 +109,35 @@ export default async function EventDetailPage({ params }: PageProps) {
       price: (tier.pricePaise / 100).toFixed(2),
       priceCurrency: 'INR',
       availability: tier.available > 0 ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
+      url: `${SITE_URL}/events/${event.slug}`,
     })),
+  };
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+      { '@type': 'ListItem', position: 2, name: 'Events', item: `${SITE_URL}/events` },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: event.category.name,
+        item: `${SITE_URL}/events?category=${event.category.slug}`,
+      },
+      { '@type': 'ListItem', position: 4, name: event.title, item: `${SITE_URL}/events/${event.slug}` },
+    ],
   };
 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
 
       {/* ── Banner ── */}
       <div className="relative h-64 w-full overflow-hidden bg-ink-900 sm:h-80 lg:h-[26rem]">
         {event.bannerUrl && (
-          <Image src={event.bannerUrl} alt="" fill priority sizes="100vw" className="object-cover" />
+          <Image src={event.bannerUrl} alt={event.title} fill priority sizes="100vw" className="object-cover" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/60 to-ink-950/20" />
 

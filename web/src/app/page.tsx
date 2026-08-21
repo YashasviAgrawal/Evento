@@ -1,7 +1,23 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import * as Icons from 'lucide-react';
-import { ArrowRight, Flame, PartyPopper, Sparkles, TicketCheck } from 'lucide-react';
+import {
+  ArrowRight,
+  Baby,
+  Drama,
+  Flame,
+  GraduationCap,
+  Mic,
+  Music,
+  Palette,
+  PartyPopper,
+  Presentation,
+  Sparkles,
+  TicketCheck,
+  Trophy,
+  UtensilsCrossed,
+  Tag,
+  type LucideIcon,
+} from 'lucide-react';
 import { fetchPublic } from '@/lib/api';
 import type { HomeFeed } from '@/lib/types';
 import { EventCard } from '@/components/events/event-card';
@@ -11,9 +27,24 @@ import { EmptyState } from '@/components/ui/index';
 
 export const revalidate = 30;
 
-/** Categories come from the database with a lucide icon name; resolve it safely. */
+// Matches the fixed icon names seeded onto `categories.icon` in
+// 0002_reference_data.sql. A named import map (instead of `import * as
+// Icons`) keeps the rest of the lucide-react icon set out of the bundle.
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  Music,
+  Mic,
+  GraduationCap,
+  Trophy,
+  Drama,
+  Presentation,
+  PartyPopper,
+  UtensilsCrossed,
+  Palette,
+  Baby,
+};
+
 function CategoryIcon({ name, className }: { name: string | null; className?: string }) {
-  const Icon = (name && (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[name]) || Icons.Tag;
+  const Icon = (name && CATEGORY_ICONS[name]) || Tag;
   return <Icon className={className} />;
 }
 
@@ -58,7 +89,7 @@ export default async function HomePage() {
               {category.imageUrl && (
                 <Image
                   src={category.imageUrl}
-                  alt=""
+                  alt={`${category.name} events`}
                   fill
                   sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 20vw"
                   className="object-cover transition-transform duration-500 ease-smooth group-hover:scale-110"
@@ -152,7 +183,7 @@ export default async function HomePage() {
               {city.imageUrl && (
                 <Image
                   src={city.imageUrl}
-                  alt=""
+                  alt={`Events in ${city.name}`}
                   fill
                   sizes="(max-width: 640px) 50vw, 20vw"
                   className="object-cover opacity-70 transition duration-500 group-hover:scale-110 group-hover:opacity-90"

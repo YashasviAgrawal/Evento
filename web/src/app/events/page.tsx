@@ -10,15 +10,48 @@ import { EmptyState } from '@/components/ui/index';
 import { ButtonLink } from '@/components/ui/button';
 import { cn } from '@/lib/format';
 
-export const metadata: Metadata = {
-  title: 'Browse events',
-  description: 'Search and filter concerts, comedy nights, workshops and sport across India.',
-};
-
 type SearchParams = Record<string, string | string[] | undefined>;
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+/**
+ * Category/city landing pages (e.g. /events?category=music) get their own
+ * title, description and self-referencing canonical so they can rank as
+ * distinct pages. Every other filter combination (search, sort, pagination)
+ * canonicalizes back to the cleanest version to avoid duplicate-content
+ * fragmentation.
+ */
+export async function generateMetadata({ searchParams }: { searchParams: Promise<SearchParams> }): Promise<Metadata> {
+  const params = await searchParams;
+  const category = first(params.category);
+  const city = first(params.city);
+
+  const parts: string[] = [];
+  if (category) parts.push(category.replace(/-/g, ' '));
+  if (city) parts.push(`in ${city.replace(/-/g, ' ')}`);
+
+  const title = parts.length ? `${capitalize(parts.join(' '))} events` : 'Browse events';
+  const description = parts.length
+    ? `Discover and book ${parts.join(' ')} events with instant digital QR tickets on Tixit.`
+    : 'Search and filter concerts, comedy nights, workshops and sport across India.';
+
+  const canonicalParams = new URLSearchParams();
+  if (category) canonicalParams.set('category', category);
+  if (city) canonicalParams.set('city', city);
+  const canonical = canonicalParams.toString() ? `/events?${canonicalParams.toString()}` : '/events';
+
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: { title, description, url: canonical },
+  };
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 export default async function EventsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
