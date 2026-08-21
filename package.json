@@ -27,5 +27,8 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
+  },
+  "dependencies": {
+    "package.json": "^2.0.1"
   }
 }

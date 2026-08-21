@@ -6,6 +6,7 @@ import { validate } from '../../middleware/validate';
 import { asyncHandler, ok } from '../../utils/http';
 import { isUuid } from '../../utils/ids';
 import { dayWindow, resolveDateFilter } from '../../utils/dates';
+import { cached } from '../../utils/cache';
 import { venueInputSchema } from '../events/event.schema';
 
 /**
@@ -115,19 +116,24 @@ router.get(
 
     const extraWhere = extraClauses.length > 0 ? `AND ${extraClauses.join(' AND ')}` : '';
 
-    const { rows } = await query(
-      `SELECT c.id, c.name, c.slug, c.state, c.image_url, c.is_popular,
-              (SELECT count(*)::int FROM events e
-                ${joinParts}
-                WHERE e.city_id = c.id AND e.status = 'published' AND e.ends_at > now()
-                ${extraWhere}) AS event_count
-         FROM cities c
-        ${popularOnly ? 'WHERE c.is_popular = true' : ''}
-        ORDER BY c.display_order ASC, c.name ASC`,
-      extraParams,
-    );
     // Cache less aggressively when filters are applied since counts are context-dependent.
     const cacheMaxAge = extraParams.length > 0 ? 15 : 300;
+
+    const rows = await cached(`catalog:cities:${req.originalUrl}`, cacheMaxAge * 1000, async () => {
+      const { rows } = await query(
+        `SELECT c.id, c.name, c.slug, c.state, c.image_url, c.is_popular,
+                (SELECT count(*)::int FROM events e
+                  ${joinParts}
+                  WHERE e.city_id = c.id AND e.status = 'published' AND e.ends_at > now()
+                  ${extraWhere}) AS event_count
+           FROM cities c
+          ${popularOnly ? 'WHERE c.is_popular = true' : ''}
+          ORDER BY c.display_order ASC, c.name ASC`,
+        extraParams,
+      );
+      return rows;
+    });
+
     res.setHeader('Cache-Control', `public, max-age=${cacheMaxAge}`);
     return ok(
       res,
@@ -147,14 +153,17 @@ router.get(
 router.get(
   '/categories',
   asyncHandler(async (_req, res) => {
-    const { rows } = await query(
-      `SELECT c.id, c.name, c.slug, c.icon, c.color, c.description, c.image_url,
-              (SELECT count(*)::int FROM events e
-                WHERE e.category_id = c.id AND e.status = 'published' AND e.ends_at > now()) AS event_count
-         FROM categories c
-        WHERE c.is_active = true
-        ORDER BY c.display_order ASC`,
-    );
+    const rows = await cached('catalog:categories', 300_000, async () => {
+      const { rows } = await query(
+        `SELECT c.id, c.name, c.slug, c.icon, c.color, c.description, c.image_url,
+                (SELECT count(*)::int FROM events e
+                  WHERE e.category_id = c.id AND e.status = 'published' AND e.ends_at > now()) AS event_count
+           FROM categories c
+          WHERE c.is_active = true
+          ORDER BY c.display_order ASC`,
+      );
+      return rows;
+    });
     res.setHeader('Cache-Control', 'public, max-age=300');
     return ok(
       res,

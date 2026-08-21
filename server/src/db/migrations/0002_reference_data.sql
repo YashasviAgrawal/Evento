@@ -43,7 +43,7 @@ INSERT INTO settings (key, value, description) VALUES
   ('convenience_fee_percent', '2',     'Platform convenience fee (%) applied to the discounted subtotal'),
   ('booking_hold_minutes',    '15',    'Minutes a pending booking holds inventory before it is released'),
   ('refund_window_hours',     '48',    'Hours before event start during which a customer may request a refund'),
-  ('support_email',           '"support@evento.test"', 'Support address shown to customers'),
+  ('support_email',           '"support@tixit.in"',    'Support address shown to customers'),
   ('platform_name',           '"Evento"',              'Display name used across emails and tickets'),
   ('auto_approve_events',     'false', 'When true, submitted events publish without admin review')
 ON CONFLICT (key) DO NOTHING;

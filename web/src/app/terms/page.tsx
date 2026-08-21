@@ -5,6 +5,7 @@ import { LegalList, LegalPage, LegalSection } from '@/components/legal/legal-pag
 export const metadata: Metadata = {
   title: 'Terms & Conditions',
   description: 'The terms that govern your use of Tixit to discover, book, and manage event tickets.',
+  alternates: { canonical: '/terms' },
 };
 
 export default function TermsPage() {
@@ -137,7 +138,7 @@ export default function TermsPage() {
       <LegalSection heading="13. Governing Law">
         <p>
           These Terms are governed by the laws of India. Any disputes arising from your use of the Platform will be
-          subject to the exclusive jurisdiction of the courts of Bengaluru, Karnataka.
+          subject to the exclusive jurisdiction of the courts of Jaipur, Rajasthan.
         </p>
       </LegalSection>
 
@@ -152,8 +153,8 @@ export default function TermsPage() {
       <LegalSection heading="15. Contact Us">
         <p>
           Questions about these Terms can be sent to{' '}
-          <a href="mailto:support@tixit.test" className="font-medium text-brand-600 hover:underline">
-            support@tixit.test
+          <a href="mailto:support@tixit.in" className="font-medium text-brand-600 hover:underline">
+            support@tixit.in
           </a>
           .
         </p>

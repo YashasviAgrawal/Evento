@@ -5,6 +5,7 @@ import { LegalList, LegalPage, LegalSection } from '@/components/legal/legal-pag
 export const metadata: Metadata = {
   title: 'Privacy Policy',
   description: 'How Tixit collects, uses, and protects your personal information.',
+  alternates: { canonical: '/privacy' },
 };
 
 export default function PrivacyPolicyPage() {
@@ -138,8 +139,8 @@ export default function PrivacyPolicyPage() {
       <LegalSection heading="11. Contact Us">
         <p>
           Questions about this Privacy Policy or your personal information can be sent to{' '}
-          <a href="mailto:support@tixit.test" className="font-medium text-brand-600 hover:underline">
-            support@tixit.test
+          <a href="mailto:support@tixit.in" className="font-medium text-brand-600 hover:underline">
+            support@tixit.in
           </a>{' '}
           or reviewed alongside our{' '}
           <Link href="/terms" className="font-medium text-brand-600 hover:underline">

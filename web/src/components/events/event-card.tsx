@@ -16,7 +16,7 @@ export function EventCard({ event, priority = false }: { event: EventCardType; p
       <div className="relative aspect-[16/10] overflow-hidden bg-ink-100">
         <Image
           src={event.thumbnailUrl || event.bannerUrl || FALLBACK_IMAGE}
-          alt=""
+          alt={`${event.title} — ${event.venue.name}, ${event.city.name}`}
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
           priority={priority}

@@ -2,7 +2,7 @@
   "name": "@evento/server",
   "version": "1.0.0",
   "private": true,
-  "description": "Evento REST API \u2014 Express + PostgreSQL",
+  "description": "Evento REST API — Express + PostgreSQL",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -29,6 +29,7 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
+    "package.json": "^2.0.1",
     "pdfkit": "^0.15.2",
     "pg": "^8.13.1",
     "pino": "^9.5.0",
