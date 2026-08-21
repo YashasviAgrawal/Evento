@@ -66,31 +66,44 @@ export function Footer() {
             </p>
 
             <div className="mt-5 space-y-2 text-sm text-ink-400">
+              <a href="mailto:support@tixit.in" className="flex items-center gap-2 transition hover:text-white">
+                <Mail className="h-4 w-4 shrink-0" aria-hidden /> support@tixit.in
+              </a>
+              <a href="tel:+917877701381" className="flex items-center gap-2 transition hover:text-white">
+                <Phone className="h-4 w-4 shrink-0" aria-hidden /> +91 78777 01381
+              </a>
               <p className="flex items-center gap-2">
-                <Mail className="h-4 w-4 shrink-0" aria-hidden /> support@tixit.test
-              </p>
-              <p className="flex items-center gap-2">
-                <Phone className="h-4 w-4 shrink-0" aria-hidden /> +91 80 4718 2200
-              </p>
-              <p className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 shrink-0" aria-hidden /> Bengaluru, India
+                <MapPin className="h-4 w-4 shrink-0" aria-hidden /> Jaipur, Rajasthan
               </p>
             </div>
 
             <div className="mt-5 flex gap-2">
               {[
-                { Icon: Instagram, label: 'Instagram' },
-                { Icon: Twitter, label: 'Twitter' },
-                { Icon: Facebook, label: 'Facebook' },
-              ].map(({ Icon, label }) => (
-                <span
-                  key={label}
-                  aria-label={label}
-                  className="grid h-9 w-9 place-items-center rounded-lg bg-ink-900 text-ink-400 transition hover:bg-ink-800 hover:text-white"
-                >
-                  <Icon className="h-4 w-4" />
-                </span>
-              ))}
+                { Icon: Instagram, label: 'Instagram', href: 'https://www.instagram.com/tixit.in/' },
+                { Icon: Twitter, label: 'Twitter', href: null },
+                { Icon: Facebook, label: 'Facebook', href: null },
+              ].map(({ Icon, label, href }) =>
+                href ? (
+                  <a
+                    key={label}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={label}
+                    className="grid h-9 w-9 place-items-center rounded-lg bg-ink-900 text-ink-400 transition hover:bg-ink-800 hover:text-white"
+                  >
+                    <Icon className="h-4 w-4" />
+                  </a>
+                ) : (
+                  <span
+                    key={label}
+                    aria-label={label}
+                    className="grid h-9 w-9 place-items-center rounded-lg bg-ink-900 text-ink-400 transition hover:bg-ink-800 hover:text-white"
+                  >
+                    <Icon className="h-4 w-4" />
+                  </span>
+                ),
+              )}
             </div>
           </div>
 

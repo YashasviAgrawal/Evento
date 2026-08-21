@@ -24,7 +24,7 @@ const DEFAULTS: PlatformSettings = {
   convenience_fee_percent: env.business.defaultConvenienceFeePercent,
   booking_hold_minutes: env.business.bookingHoldMinutes,
   refund_window_hours: 48,
-  support_email: 'support@evento.test',
+  support_email: 'support@tixit.in',
   platform_name: 'Evento',
   auto_approve_events: false,
 };

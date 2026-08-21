@@ -137,7 +137,7 @@ export default function TermsPage() {
       <LegalSection heading="13. Governing Law">
         <p>
           These Terms are governed by the laws of India. Any disputes arising from your use of the Platform will be
-          subject to the exclusive jurisdiction of the courts of Bengaluru, Karnataka.
+          subject to the exclusive jurisdiction of the courts of Jaipur, Rajasthan.
         </p>
       </LegalSection>
 
@@ -152,8 +152,8 @@ export default function TermsPage() {
       <LegalSection heading="15. Contact Us">
         <p>
           Questions about these Terms can be sent to{' '}
-          <a href="mailto:support@tixit.test" className="font-medium text-brand-600 hover:underline">
-            support@tixit.test
+          <a href="mailto:support@tixit.in" className="font-medium text-brand-600 hover:underline">
+            support@tixit.in
           </a>
           .
         </p>
