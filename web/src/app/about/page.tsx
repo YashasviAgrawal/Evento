@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { Mail, MapPin, Phone, Instagram, TicketCheck, ShieldCheck, Rocket, Users } from 'lucide-react';
 import { ButtonLink } from '@/components/ui/button';
 
@@ -94,6 +95,22 @@ export default function AboutPage() {
               <p className="mt-1.5 text-sm leading-relaxed text-ink-500">{description}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="container-page pb-14">
+        <div className="flex flex-col items-center gap-4 rounded-2xl border border-ink-100 bg-ink-50/60 px-8 py-10 text-center">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Powered by</p>
+          <Image
+            src="/brand/singletap-dark.png"
+            alt="SingleTap"
+            width={370}
+            height={139}
+            className="h-9 w-auto"
+          />
+          <p className="max-w-md text-sm leading-relaxed text-ink-500">
+            Tixit is powered by SingleTap.
+          </p>
         </div>
       </section>
 
