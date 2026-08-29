@@ -26,6 +26,7 @@ const COLUMNS = [
   {
     title: 'Organizers',
     links: [
+      { href: '/list-your-show', label: 'List your show' },
       { href: '/organizer/register', label: 'List your event' },
       { href: '/organizer', label: 'Organizer dashboard' },
       { href: '/organizer/scan', label: 'Scan tickets' },
