@@ -13,12 +13,6 @@ import { cn } from '@/lib/format';
 
 type Mode = 'password' | 'otp';
 
-const DEMO_ACCOUNTS = [
-  { label: 'Customer', email: 'customer@evento.test' },
-  { label: 'Organizer', email: 'organizer@evento.test' },
-  { label: 'Admin', email: 'admin@evento.test' },
-];
-
 export default function LoginPage() {
   return (
     <Suspense fallback={<div className="grid min-h-[70vh] place-items-center"><Spinner className="h-8 w-8" /></div>}>
@@ -36,7 +30,7 @@ function LoginForm() {
   const next = searchParams.get('next') ?? '';
   const [mode, setMode] = useState<Mode>('password');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('Password123');
+  const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [devOtp, setDevOtp] = useState<string | null>(null);
@@ -252,30 +246,6 @@ function LoginForm() {
             >
               Create an account
             </Link>
-          </p>
-        </div>
-
-        {/* Demo credentials — this is a seeded demo environment. */}
-        <div className="mt-5 rounded-xl border border-dashed border-ink-300 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Demo accounts</p>
-          <div className="mt-2.5 grid gap-1.5">
-            {DEMO_ACCOUNTS.map((account) => (
-              <button
-                key={account.email}
-                onClick={() => {
-                  setMode('password');
-                  setEmail(account.email);
-                  setPassword('Password123');
-                }}
-                className="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition hover:bg-ink-100"
-              >
-                <span className="font-medium text-ink-700">{account.label}</span>
-                <span className="font-mono text-ink-500">{account.email}</span>
-              </button>
-            ))}
-          </div>
-          <p className="mt-2 px-2.5 text-xs text-ink-400">
-            Password: <span className="font-mono">Password123</span>
           </p>
         </div>
       </div>
