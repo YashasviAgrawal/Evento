@@ -92,6 +92,15 @@ export function Navbar() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            {/* Kept out of NAV_LINKS: this addresses organizers, not the
+                event-browsing audience those filter links serve. */}
+            <Link
+              href="/list-your-show"
+              className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-brand-600 transition hover:bg-brand-50 lg:inline-flex"
+            >
+              List your show
+            </Link>
+
             {!mounted || loading ? (
               <div className="h-9 w-24 animate-pulse rounded-lg bg-ink-100" />
             ) : user ? (
@@ -196,6 +205,12 @@ export function Navbar() {
                   {link.label}
                 </Link>
               ))}
+              <Link
+                href="/list-your-show"
+                className="rounded-lg px-3 py-2.5 text-sm font-semibold text-brand-600 hover:bg-brand-50"
+              >
+                List your show
+              </Link>
             </nav>
           </div>
         )}

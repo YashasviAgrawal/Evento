@@ -26,6 +26,7 @@ const COLUMNS = [
   {
     title: 'Organizers',
     links: [
+      { href: '/list-your-show', label: 'List your show' },
       { href: '/organizer/register', label: 'List your event' },
       { href: '/organizer', label: 'Organizer dashboard' },
       { href: '/organizer/scan', label: 'Scan tickets' },
@@ -141,6 +142,18 @@ export function Footer() {
         <div className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-ink-800 pt-6 sm:flex-row">
           <p className="text-xs text-ink-500">© {new Date().getFullYear()} Tixit. All rights reserved.</p>
           <p className="text-xs text-ink-500">Payments secured by Razorpay · UPI · Cards · Net Banking</p>
+        </div>
+
+        {/* Tixit is a SingleTap product — attribution sits below the legal line. */}
+        <div className="mt-6 flex items-center justify-center gap-2.5">
+          <span className="text-xs uppercase tracking-wide text-ink-500">Powered by</span>
+          <Image
+            src="/brand/singletap-white.png"
+            alt="SingleTap"
+            width={370}
+            height={139}
+            className="h-6 w-auto"
+          />
         </div>
       </div>
     </footer>
