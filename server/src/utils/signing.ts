@@ -44,6 +44,47 @@ export function parseQrPayload(payload: string): { ticketCode: string; signature
   return { ticketCode: trimmed.slice(0, separator), signature: trimmed.slice(separator + 1) };
 }
 
+/** A signature is always the first 32 hex characters of the HMAC. */
+const QR_SIGNATURE = /^[0-9a-f]{32}$/i;
+
+/** The 8 characters after `TKT-`, drawn from the unambiguous alphabet in ids.ts. */
+const TICKET_CODE_BODY = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/;
+
+/**
+ * Turn what a gate attendant typed into the canonical stored ticket code.
+ *
+ * People read these codes off a phone screen or a printed PDF, so accept the
+ * forms they actually type — lower case, missing prefix, stray spaces or
+ * hyphens — and return `null` for anything that cannot be a ticket code.
+ */
+export function normaliseTicketCode(input: string): string | null {
+  const cleaned = input.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const body = cleaned.startsWith('TKT') ? cleaned.slice(3) : cleaned;
+  return TICKET_CODE_BODY.test(body) ? `TKT-${body}` : null;
+}
+
+export interface TicketInput {
+  ticketCode: string;
+  /** Present only for a scanned QR; a typed code carries no signature. */
+  signature: string | null;
+  source: 'qr' | 'manual';
+}
+
+/**
+ * Accept either input the check-in endpoint can receive: the signed payload a
+ * camera decodes (`TKT-XXXXXXXX.<signature>`) or the bare ticket code printed
+ * on the ticket, which the manual-entry fallback sends.
+ */
+export function parseTicketInput(raw: string): TicketInput | null {
+  const parsed = parseQrPayload(raw);
+  if (parsed && QR_SIGNATURE.test(parsed.signature)) {
+    return { ticketCode: parsed.ticketCode.trim(), signature: parsed.signature, source: 'qr' };
+  }
+
+  const code = normaliseTicketCode(raw);
+  return code ? { ticketCode: code, signature: null, source: 'manual' } : null;
+}
+
 export function sha256(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
 }

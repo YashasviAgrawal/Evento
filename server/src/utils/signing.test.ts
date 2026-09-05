@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { buildQrPayload, parseQrPayload, safeEqual, signTicket, verifyTicketSignature } from './signing';
+import {
+  buildQrPayload,
+  normaliseTicketCode,
+  parseQrPayload,
+  parseTicketInput,
+  safeEqual,
+  signTicket,
+  verifyTicketSignature,
+} from './signing';
 import { toCsv } from './csv';
 import { generateBookingCode, generateOtp, generateTicketCode, slugify } from './ids';
 
@@ -47,6 +55,43 @@ describe('QR ticket signing', () => {
     expect(safeEqual('abc', 'abc')).toBe(true);
     expect(safeEqual('abc', 'abcd')).toBe(false);
     expect(safeEqual('', '')).toBe(true);
+  });
+});
+
+describe('check-in input parsing', () => {
+  const eventId = '9f8d1c4e-1111-4aaa-9bbb-000000000001';
+
+  it('reads a scanned QR payload and keeps its signature', () => {
+    const parsed = parseTicketInput(buildQrPayload('TKT-ABCD2345', eventId));
+
+    expect(parsed).toMatchObject({ ticketCode: 'TKT-ABCD2345', source: 'qr' });
+    expect(verifyTicketSignature('TKT-ABCD2345', eventId, parsed!.signature!)).toBe(true);
+  });
+
+  it('accepts the bare ticket code printed on the ticket', () => {
+    // The manual-entry fallback can only ever send the code — the signature is
+    // not printed anywhere a person could read it.
+    expect(parseTicketInput('TKT-ABCD2345')).toEqual({
+      ticketCode: 'TKT-ABCD2345',
+      signature: null,
+      source: 'manual',
+    });
+  });
+
+  it('forgives how the code was typed', () => {
+    for (const typed of ['tkt-abcd2345', '  TKT-ABCD2345  ', 'TKTABCD2345', 'ABCD2345', 'TKT ABCD 2345']) {
+      expect(normaliseTicketCode(typed)).toBe('TKT-ABCD2345');
+    }
+  });
+
+  it('rejects input that cannot be a ticket code', () => {
+    for (const bad of ['', '   ', 'TKT-', 'TKT-SHORT', 'TKT-ABCD23456', 'TKT-ABCD01IL', 'not a ticket']) {
+      expect(parseTicketInput(bad)).toBeNull();
+    }
+  });
+
+  it('treats a code with a non-signature suffix as manual input, not a QR', () => {
+    expect(parseTicketInput('TKT-ABCD2345.')).toMatchObject({ source: 'manual', signature: null });
   });
 });
 

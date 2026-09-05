@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { query, queryOne, withTransaction } from '../../db/pool';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../utils/errors';
 import { generateTicketCode } from '../../utils/ids';
-import { buildQrPayload, parseQrPayload, signTicket, verifyTicketSignature } from '../../utils/signing';
+import { buildQrPayload, parseTicketInput, signTicket, verifyTicketSignature } from '../../utils/signing';
 
 /**
  * Issue one ticket row per ticket purchased.
@@ -181,11 +181,19 @@ export interface CheckInResult {
 }
 
 /**
- * Verify a scanned QR payload and admit the holder.
+ * Verify a scanned QR payload — or a manually typed ticket code — and admit
+ * the holder.
  *
- * Two layers of defence:
- *  1. The HMAC signature is checked before any lookup, so a fabricated code is
- *     rejected without touching the database.
+ * Both entry points reach this function: the camera sends the signed payload
+ * `TKT-XXXXXXXX.<signature>`, while the manual fallback sends only the
+ * `TKT-XXXXXXXX` code printed on the ticket, because that is all a human can
+ * read off it. A typed code therefore has no signature to check; it is
+ * authenticated by the code itself plus the organizer's own session and the
+ * ownership check below.
+ *
+ * Layers of defence:
+ *  1. A scanned QR's HMAC signature is verified against the event, so a forged
+ *     or replayed QR is rejected even if it names a real ticket.
  *  2. Admission is a conditional UPDATE (`WHERE status = 'valid'`). Because
  *     the state transition and the check are the same statement, two gate
  *     staff scanning the same ticket simultaneously cannot both be told
@@ -196,7 +204,7 @@ export async function checkInTicket(
   scanner: { id: string; role: string; organizerId?: string },
   expectedEventId?: string,
 ): Promise<CheckInResult> {
-  const parsed = parseQrPayload(rawPayload);
+  const parsed = parseTicketInput(rawPayload);
   if (!parsed) {
     return { status: 'invalid', message: 'Unrecognised ticket code' };
   }
@@ -227,7 +235,8 @@ export async function checkInTicket(
 
   if (!ticket) return { status: 'invalid', message: 'Ticket not found' };
 
-  if (!verifyTicketSignature(parsed.ticketCode, ticket.event_id, parsed.signature)) {
+  // Only a scanned QR carries a signature to check.
+  if (parsed.signature && !verifyTicketSignature(parsed.ticketCode, ticket.event_id, parsed.signature)) {
     return { status: 'invalid', message: 'This ticket failed verification' };
   }
 
@@ -320,10 +329,11 @@ export async function getCheckInStats(eventId: string): Promise<{
   return { total, checkedIn, cancelled, remaining: Math.max(0, total - checkedIn - cancelled) };
 }
 
-/** Look a ticket up without admitting it — used by the manual-entry fallback. */
+/** Look a ticket up without admitting it — accepts a QR payload or a typed code. */
 export async function lookupTicket(code: string): Promise<CheckInResult> {
-  const parsed = parseQrPayload(code);
-  const ticketCode = parsed?.ticketCode ?? code.trim();
+  const parsed = parseTicketInput(code);
+  if (!parsed) return { status: 'invalid', message: 'Unrecognised ticket code' };
+  const ticketCode = parsed.ticketCode;
 
   const ticket = await queryOne<{
     attendee_name: string;
@@ -362,5 +372,5 @@ export async function lookupTicket(code: string): Promise<CheckInResult> {
 }
 
 export function assertValidPayload(payload: string): void {
-  if (!parseQrPayload(payload)) throw new BadRequestError('Unrecognised ticket code', 'INVALID_QR');
+  if (!parseTicketInput(payload)) throw new BadRequestError('Unrecognised ticket code', 'INVALID_QR');
 }

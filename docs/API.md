@@ -205,15 +205,23 @@ An invalid signature returns `402 SIGNATURE_MISMATCH` and marks the payment fail
 | GET | `/reports?days=30` | Same, over a chosen window. |
 | GET | `/bookings` | Attendees, filterable by event, status and free text. |
 | GET | `/bookings/export` | **CSV** of attendees (`?eventId=` to scope). |
-| POST | `/checkin` | Scan a QR payload and admit the holder. |
-| POST | `/checkin/lookup` | Look a ticket up without admitting it. |
+| POST | `/checkin` | Scan a QR payload — or a manually typed ticket code — and admit the holder. |
+| POST | `/checkin/lookup` | Look a ticket up without admitting it. Accepts either form. |
 | POST | `/checkin/:ticketId/undo` | Reverse an accidental scan. |
 | GET | `/events/:id/checkin-stats` | Live attendance counters. |
 
 ```http
 POST /organizer/checkin
 { "payload": "TKT-9QP4X7R2.4f3c…", "eventId": "…" }
+
+// Manual entry sends the bare code printed on the ticket. The `TKT-` prefix,
+// letter case and stray spaces are all optional — "9qp4 x7r2" works too.
+{ "payload": "TKT-9QP4X7R2", "eventId": "…" }
 ```
+
+A scanned QR carries an HMAC signature bound to the event, which is verified
+before admission. A typed code has no signature to verify — it is authenticated
+by the code itself plus the organizer session, which must own the event.
 
 ```jsonc
 { "success": true,
