@@ -250,7 +250,8 @@ function Scanner() {
               Manual entry
             </h2>
             <p className="mt-0.5 text-xs text-ink-500">
-              Type the ticket code if the QR won&apos;t scan (e.g. TKT-9QP4X7R2)
+              Type the ticket code printed on the ticket if the QR won&apos;t scan (e.g. TKT-9QP4X7R2).
+              The TKT- prefix is optional.
             </p>
             <div className="mt-3 flex gap-2">
               <Input

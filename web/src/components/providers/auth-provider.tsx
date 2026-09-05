@@ -5,11 +5,19 @@ import { useRouter } from 'next/navigation';
 import { api, tokenStore } from '@/lib/api';
 import type { User } from '@/lib/types';
 
+/**
+ * `signup` redeems the code that creates the account — registration parks the
+ * details server-side and nothing exists until this succeeds. `verify_email`
+ * confirms the address on an account that already exists.
+ */
+export type VerifyPurpose = 'signup' | 'verify_email';
+
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<User>;
   signInWithOtp: (email: string, code: string) => Promise<User>;
+  verifyEmail: (email: string, code: string, purpose?: VerifyPurpose) => Promise<User>;
   register: (input: {
     fullName: string;
     email: string;
@@ -17,7 +25,7 @@ interface AuthContextValue {
     phone?: string;
     role: 'customer' | 'organizer';
     organizerName?: string;
-  }) => Promise<{ devOtp?: string }>;
+  }) => Promise<{ email: string; devOtp?: string }>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -98,10 +106,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [persist],
   );
 
+  /**
+   * Redeem the code mailed at registration. The API answers with a session in
+   * both flows, so persisting it signs in the account that was just created
+   * (signup) or refreshes the cached user with `emailVerified: true`.
+   */
+  const verifyEmail = useCallback(
+    async (email: string, code: string, purpose: VerifyPurpose = 'signup') => {
+      const { data } = await api.post<SessionResponse>('/auth/otp/verify', { email, code, purpose });
+      return persist(data);
+    },
+    [persist],
+  );
+
+  /**
+   * Starts a registration — it does not create an account. The server holds
+   * the details and mails a code; the account exists only once `verifyEmail`
+   * redeems it, so there is no session to persist here.
+   */
   const register = useCallback(
     async (input: Parameters<AuthContextValue['register']>[0]) => {
-      const { data } = await api.post<{ user: User; devOtp?: string }>('/auth/register', input);
-      return { devOtp: data.devOtp };
+      const { data } = await api.post<{ email: string; devOtp?: string }>('/auth/register', input);
+      return { email: data.email, devOtp: data.devOtp };
     },
     [],
   );
@@ -124,11 +150,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading: !hydrated || loading,
       signIn,
       signInWithOtp,
+      verifyEmail,
       register,
       signOut,
       refreshUser: loadSession,
     }),
-    [hydrated, user, loading, signIn, signInWithOtp, register, signOut, loadSession],
+    [hydrated, user, loading, signIn, signInWithOtp, verifyEmail, register, signOut, loadSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

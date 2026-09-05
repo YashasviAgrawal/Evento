@@ -1,5 +1,5 @@
 {
-  "name": "evento",
+  "name": "tixit",
   "version": "1.0.0",
   "private": true,
   "description": "Tixit — event discovery and ticket booking platform (customers, organizers, admin).",

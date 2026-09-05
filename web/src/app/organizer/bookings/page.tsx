@@ -96,7 +96,7 @@ function BookingsTable() {
     try {
       await downloadFile(
         `/organizer/bookings/export${eventId ? `?eventId=${eventId}` : ''}`,
-        `evento-attendees-${new Date().toISOString().slice(0, 10)}.csv`,
+        `tixit-attendees-${new Date().toISOString().slice(0, 10)}.csv`,
       );
       toast.success('Export downloaded');
     } catch {

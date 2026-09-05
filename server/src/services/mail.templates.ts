@@ -72,7 +72,7 @@ function layout(heading: string, bodyHtml: string, cta?: { label: string; url: s
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
         <tr><td style="background:${BRAND};padding:20px 28px;">
-          <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.02em;">Evento</span>
+          <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.02em;">Tixit</span>
         </td></tr>
         <tr><td style="padding:28px;">
           <h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;color:#18181b;">${heading}</h1>
@@ -87,7 +87,7 @@ function layout(heading: string, bodyHtml: string, cta?: { label: string; url: s
         </td></tr>
         <tr><td style="padding:18px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#71717a;">
           Need help? Reply to this email and our team will get back to you.<br>
-          <span style="color:#a1a1aa;">© ${new Date().getFullYear()} Evento. All rights reserved.</span>
+          <span style="color:#a1a1aa;">© ${new Date().getFullYear()} Tixit. All rights reserved.</span>
         </td></tr>
       </table>
     </td></tr>
@@ -128,20 +128,20 @@ export function renderTemplate<T extends TemplateName>(name: T, data: TemplateDa
         </div>
         <p style="color:#71717a;font-size:13px;">If you didn't request this, you can safely ignore this email — no changes were made to your account.</p>`;
       return {
-        subject: `${d.code} is your Evento verification code`,
+        subject: `${d.code} is your Tixit verification code`,
         html: layout(`Hi${d.name ? ` ${d.name}` : ''}, verify it's you`, body),
-        text: `Your Evento verification code is ${d.code}. It expires in ${d.ttlMinutes} minutes.`,
+        text: `Your Tixit verification code is ${d.code}. It expires in ${d.ttlMinutes} minutes.`,
       };
     }
 
     case 'welcome': {
       const d = data as TemplateData['welcome'];
-      const body = `<p>Welcome to Evento! Your account is ready.</p>
+      const body = `<p>Welcome to Tixit! Your account is ready.</p>
         <p>Discover concerts, comedy nights, workshops and more happening around you — and book in a single tap.</p>`;
       return {
-        subject: 'Welcome to Evento 🎉',
+        subject: 'Welcome to Tixit 🎉',
         html: layout(`Welcome aboard, ${d.name}`, body, { label: 'Explore events', url: env.webBaseUrl }),
-        text: `Welcome to Evento, ${d.name}! Start exploring events at ${env.webBaseUrl}`,
+        text: `Welcome to Tixit, ${d.name}! Start exploring events at ${env.webBaseUrl}`,
       };
     }
 

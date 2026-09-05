@@ -11,7 +11,7 @@ export function renderTicketsPdf(
   tickets: TicketView[],
   booking: { bookingCode: string; customerName: string; totalPaise: number },
 ): NodeJS.ReadableStream {
-  const doc = new PDFDocument({ size: 'A4', margin: 0, info: { Title: `Evento ticket ${booking.bookingCode}` } });
+  const doc = new PDFDocument({ size: 'A4', margin: 0, info: { Title: `Tixit ticket ${booking.bookingCode}` } });
 
   const BRAND = '#e11d48';
   const INK = '#18181b';
@@ -23,7 +23,7 @@ export function renderTicketsPdf(
 
     // Header band
     doc.rect(0, 0, PAGE_WIDTH, 90).fill(BRAND);
-    doc.fillColor('#ffffff').fontSize(26).font('Helvetica-Bold').text('Evento', 48, 30);
+    doc.fillColor('#ffffff').fontSize(26).font('Helvetica-Bold').text('Tixit', 48, 30);
     doc.fontSize(10).font('Helvetica').text('E-TICKET', PAGE_WIDTH - 148, 38, { width: 100, align: 'right' });
 
     let y = 130;

@@ -44,7 +44,7 @@ export function AddToCalendar({
   }, []);
 
   function saveIcs() {
-    downloadIcs(event, filename ?? 'evento-event.ics');
+    downloadIcs(event, filename ?? 'tixit-event.ics');
     toast.success('Calendar file downloaded', 'Open it to add the event.');
     setOpen(false);
   }

@@ -103,7 +103,7 @@ export function createApp(): Express {
       success: dbUp,
       data: {
         status: dbUp ? 'ok' : 'degraded',
-        service: 'evento-api',
+        service: 'tixit-api',
         version: '1.0.0',
         environment: env.nodeEnv,
         database: dbUp ? 'up' : 'down',
@@ -138,7 +138,7 @@ export function createApp(): Express {
 
   api.get('/', (_req, res) =>
     ok(res, {
-      name: 'Evento API',
+      name: 'Tixit API',
       version: 'v1',
       docs: `${env.apiBaseUrl}/api/v1/health`,
     }),

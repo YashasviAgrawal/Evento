@@ -1,4 +1,4 @@
-# Evento API Reference
+# Tixit API Reference
 
 Base URL: `http://localhost:4000/api/v1`
 
@@ -33,21 +33,44 @@ Common error codes: `VALIDATION_ERROR` (422), `UNAUTHORIZED`/`TOKEN_EXPIRED` (40
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
-| POST | `/register` | — | Create a customer or organizer account. Sends a verification OTP. |
+| POST | `/register` | — | Start a signup. Holds the details and emails a code — **no account is created here**. |
 | POST | `/login` | — | Email + password. Returns user, access and refresh tokens. |
 | POST | `/otp/request` | — | Email a one-time code. Never reveals whether the address exists. |
-| POST | `/otp/verify` | — | Verify a code; signs in, verifies email, or resets a password. |
+| POST | `/otp/verify` | — | Verify a code; creates the account (`signup`), signs in, verifies email, or resets a password. |
 | POST | `/refresh` | — | Rotate the refresh token, mint a new access token. |
 | POST | `/logout` | — | Revoke the supplied refresh token. |
 | GET | `/me` | ✔ | Current user with organizer profile if any. |
 | PATCH | `/me` | ✔ | Update name, phone, avatar, home city. |
 | POST | `/change-password` | ✔ | Change password; revokes every session. |
 
+### Signup is two steps
+
+Email verification is mandatory. `POST /auth/register` does **not** create a user: it parks the
+submitted details in `pending_registrations` and emails a 6-digit code. The `users` row is created
+by `POST /auth/otp/verify` with `purpose: "signup"`, which returns a session like `/auth/login`.
+
+An address that is never verified therefore has no account at all — it cannot sign in, does not
+appear in admin, and does not hold the email/phone unique indexes. Pending rows expire after 24
+hours and are deleted by the `purge-pending-registrations` job.
+
 ```http
 POST /auth/register
 { "fullName": "Aarav Sharma", "email": "aarav@example.com", "password": "hunter2secure",
   "phone": "9876543210", "role": "organizer", "organizerName": "Nova Live" }
+
+→ 201 { "email": "aarav@example.com", "otpSent": true }
 ```
+
+```http
+POST /auth/otp/verify
+{ "email": "aarav@example.com", "code": "482913", "purpose": "signup" }
+
+→ 200 { "user": { … }, "accessToken": "…", "refreshToken": "…" }
+```
+
+`POST /auth/otp/request` with `purpose: "signup"` resends the code and extends the pending row's
+lifetime. Signing in with the correct password for an unverified signup returns `403
+EMAIL_NOT_VERIFIED` so the client can route back to the code screen.
 
 Rate limits: 20 attempts / 15 min per email on credential routes; 5 / 10 min on OTP requests.
 
@@ -205,15 +228,23 @@ An invalid signature returns `402 SIGNATURE_MISMATCH` and marks the payment fail
 | GET | `/reports?days=30` | Same, over a chosen window. |
 | GET | `/bookings` | Attendees, filterable by event, status and free text. |
 | GET | `/bookings/export` | **CSV** of attendees (`?eventId=` to scope). |
-| POST | `/checkin` | Scan a QR payload and admit the holder. |
-| POST | `/checkin/lookup` | Look a ticket up without admitting it. |
+| POST | `/checkin` | Scan a QR payload — or a manually typed ticket code — and admit the holder. |
+| POST | `/checkin/lookup` | Look a ticket up without admitting it. Accepts either form. |
 | POST | `/checkin/:ticketId/undo` | Reverse an accidental scan. |
 | GET | `/events/:id/checkin-stats` | Live attendance counters. |
 
 ```http
 POST /organizer/checkin
 { "payload": "TKT-9QP4X7R2.4f3c…", "eventId": "…" }
+
+// Manual entry sends the bare code printed on the ticket. The `TKT-` prefix,
+// letter case and stray spaces are all optional — "9qp4 x7r2" works too.
+{ "payload": "TKT-9QP4X7R2", "eventId": "…" }
 ```
+
+A scanned QR carries an HMAC signature bound to the event, which is verified
+before admission. A typed code has no signature to verify — it is authenticated
+by the code itself plus the organizer session, which must own the event.
 
 ```jsonc
 { "success": true,

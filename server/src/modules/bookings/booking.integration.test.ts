@@ -325,10 +325,44 @@ describe('confirmation, tickets and check-in', () => {
     expect(second.status).toBe('already_used');
   });
 
+  it('admits a manually typed ticket code', async () => {
+    // The gate fallback: the attendee's QR won't scan, so staff type the code
+    // printed on the ticket. That code carries no signature, so the check-in
+    // path must not demand one.
+    const customer = await createCustomer(203);
+    customerIds.push(customer);
+
+    const booking = await createBooking(customer, {
+      eventId,
+      items: [{ ticketTypeId: roomyTierId, quantity: 1 }],
+      customerName: 'Type Me',
+      customerEmail: `${TAG}-customer-203@test.local`,
+      customerPhone: '9900000000',
+    });
+    await confirmBooking(booking.id, { method: 'mock' });
+
+    const tickets = await getTicketsForBooking(booking.id, { id: customer, role: 'customer' });
+    const scanner = { id: organizerUserId, role: 'organizer', organizerId };
+
+    // Typed in lower case, without the prefix — as someone reading it aloud would.
+    const typed = tickets[0]!.ticketCode.replace('TKT-', '').toLowerCase();
+    const first = await checkInTicket(typed, scanner, eventId);
+    expect(first.status).toBe('admitted');
+    expect(first.ticket?.ticketCode).toBe(tickets[0]!.ticketCode);
+
+    const second = await checkInTicket(tickets[0]!.ticketCode, scanner, eventId);
+    expect(second.status).toBe('already_used');
+  });
+
   it('rejects a forged QR payload', async () => {
     const scanner = { id: organizerUserId, role: 'organizer', organizerId };
     const result = await checkInTicket('TKT-FORGED99.' + 'a'.repeat(32), scanner, eventId);
     expect(result.status).toBe('invalid');
+  });
+
+  it('rejects a typed code that does not exist', async () => {
+    const scanner = { id: organizerUserId, role: 'organizer', organizerId };
+    expect((await checkInTicket('TKT-ZZZZZZZZ', scanner, eventId)).status).toBe('invalid');
   });
 
   it('refuses a scanner from another organizer', async () => {

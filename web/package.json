@@ -1,5 +1,5 @@
 {
-  "name": "@evento/web",
+  "name": "@tixit/web",
   "version": "1.0.0",
   "private": true,
   "description": "Tixit web client — Next.js + Tailwind CSS",

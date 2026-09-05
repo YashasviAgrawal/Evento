@@ -45,7 +45,7 @@ function fold(line: string): string {
 }
 
 export function buildIcs(event: CalendarEvent): string {
-  const uid = `${toStamp(event.startsAt)}-${Math.random().toString(36).slice(2, 10)}@evento`;
+  const uid = `${toStamp(event.startsAt)}-${Math.random().toString(36).slice(2, 10)}@tixit`;
 
   const lines = [
     'BEGIN:VCALENDAR',
@@ -82,7 +82,7 @@ export function buildIcs(event: CalendarEvent): string {
   return lines.map(fold).join('\r\n');
 }
 
-export function downloadIcs(event: CalendarEvent, filename = 'evento-ticket.ics'): void {
+export function downloadIcs(event: CalendarEvent, filename = 'tixit-ticket.ics'): void {
   const blob = new Blob([buildIcs(event)], { type: 'text/calendar;charset=utf-8' });
   const url = URL.createObjectURL(blob);
 

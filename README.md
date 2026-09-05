@@ -1,4 +1,4 @@
-# Evento — Event Ticket Booking Platform
+# Tixit — Event Ticket Booking Platform
 
 A production-shaped event discovery and ticketing platform in the mould of District, BookMyShow and
 MakeMyTrip Events. Customers discover events and book QR tickets in a single tap; organizers run
@@ -90,7 +90,7 @@ end-to-end with **no external accounts or API keys**.
 Requirements: Node ≥ 20.9 and a running PostgreSQL 16.
 
 ```bash
-git clone <repo> && cd Evento
+git clone <repo> && cd tixit
 npm install
 
 # 1. Configure
@@ -130,13 +130,13 @@ Seeded by `npm run seed`. Password for all: **`Password123`**
 
 | Role | Email | Notes |
 | --- | --- | --- |
-| Admin | `admin@evento.test` | Full console |
-| Organizer | `organizer@evento.test` | Verified, 5 events |
-| Organizer | `priya@evento.test` | Verified |
-| Organizer | `sana@evento.test` | **Pending verification** — shows the gated state |
-| Customer | `customer@evento.test` | Has booking history |
+| Admin | `admin@tixit.test` | Full console |
+| Organizer | `organizer@tixit.test` | Verified, 5 events |
+| Organizer | `priya@tixit.test` | Verified |
+| Organizer | `sana@tixit.test` | **Pending verification** — shows the gated state |
+| Customer | `customer@tixit.test` | Has booking history |
 
-Seed coupons: `WELCOME10` (10% off), `FLAT200` (₹200 off over ₹1,000), `EVENTO25` (25%, capped
+Seed coupons: `WELCOME10` (10% off), `FLAT200` (₹200 off over ₹1,000), `TIXIT25` (25%, capped
 at ₹500), `EXPIRED50` (expired, for testing the failure path).
 
 Because Razorpay runs in mock mode without keys, **checkout completes for real** — the mock
@@ -148,7 +148,7 @@ the identical code path used in production.
 ## Project layout
 
 ```
-Evento/
+Tixit/
 ├── server/                        Express API
 │   └── src/
 │       ├── config/                env parsing, logger

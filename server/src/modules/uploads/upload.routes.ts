@@ -106,7 +106,7 @@ function normaliseCloudinaryError(error: unknown): Error & { httpCode?: number }
 function uploadToCloudinary(buffer: Buffer, folder: string): Promise<CloudinaryResult> {
   return new Promise<CloudinaryResult>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder: `evento/${folder}`, resource_type: 'image', overwrite: false },
+      { folder: `tixit/${folder}`, resource_type: 'image', overwrite: false },
       (error, uploaded) => {
         if (error || !uploaded) {
           reject(normaliseCloudinaryError(error));

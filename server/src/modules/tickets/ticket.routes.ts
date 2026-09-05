@@ -27,7 +27,7 @@ router.get(
     if (!booking) throw new NotFoundError('Booking');
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="evento-${booking.booking_code}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="tixit-${booking.booking_code}.pdf"`);
 
     const stream = renderTicketsPdf(tickets, {
       bookingCode: booking.booking_code,

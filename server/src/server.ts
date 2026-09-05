@@ -23,7 +23,7 @@ async function main(): Promise<void> {
         email: env.mail.enabled ? 'resend' : 'console',
         storage: env.storage.cloudinaryEnabled ? 'cloudinary' : 'local',
       },
-      `Evento API listening on ${env.apiBaseUrl}`,
+      `Tixit API listening on ${env.apiBaseUrl}`,
     );
   });
 

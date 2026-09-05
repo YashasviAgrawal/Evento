@@ -90,7 +90,7 @@ router.get(
       { header: 'Confirmed At', value: (r) => r.confirmed_at ?? '' },
     ]);
 
-    return sendCsv(res, csvFilename('evento-bookings'), csv);
+    return sendCsv(res, csvFilename('tixit-bookings'), csv);
   }),
 );
 
