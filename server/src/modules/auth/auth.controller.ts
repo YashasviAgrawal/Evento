@@ -54,7 +54,7 @@ export const requestOtp = asyncHandler(async (req, res) => {
 });
 
 export const verifyOtp = asyncHandler(async (req, res) => {
-  const row = await authService.verifyOtpAndResolve(req.body);
+  const row = await authService.verifyOtpAndResolve(req.body, { ip: clientIp(req) });
   const tokens = await authService.createSession(row, requestContext(req));
   setRefreshCookie(res, tokens.refreshToken, tokens.expiresAt);
   return ok(res, {

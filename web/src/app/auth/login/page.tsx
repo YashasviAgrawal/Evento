@@ -55,6 +55,14 @@ function LoginForm() {
       router.push(destinationFor(user.role));
       router.refresh();
     } catch (err) {
+      // The password was right but the signup was never verified, so no
+      // account exists yet. Send them to finish it rather than leaving them
+      // retyping a password that is not the problem.
+      if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
+        const params = new URLSearchParams({ email: email.trim(), ...(next ? { next } : {}) });
+        router.push(`/auth/verify-email?${params.toString()}`);
+        return;
+      }
       setError(err instanceof ApiError ? err.message : 'Could not sign you in');
     } finally {
       setLoading(false);

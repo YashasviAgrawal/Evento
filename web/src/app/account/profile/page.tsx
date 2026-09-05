@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { KeyRound, LogOut, Save, ShieldCheck } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import type { City } from '@/lib/types';
@@ -110,7 +111,12 @@ function Profile() {
                 Email verified
               </span>
             ) : (
-              <span className="badge bg-amber-50 text-amber-700 ring-amber-200">Email not verified</span>
+              <Link
+                href={`/auth/verify-email?flow=verify_email&email=${encodeURIComponent(user.email)}&next=/account/profile`}
+                className="badge bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100"
+              >
+                Email not verified — verify now
+              </Link>
             )}
             {user.organizer && <StatusBadge status={user.organizer.status} />}
           </div>

@@ -33,21 +33,44 @@ Common error codes: `VALIDATION_ERROR` (422), `UNAUTHORIZED`/`TOKEN_EXPIRED` (40
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
-| POST | `/register` | — | Create a customer or organizer account. Sends a verification OTP. |
+| POST | `/register` | — | Start a signup. Holds the details and emails a code — **no account is created here**. |
 | POST | `/login` | — | Email + password. Returns user, access and refresh tokens. |
 | POST | `/otp/request` | — | Email a one-time code. Never reveals whether the address exists. |
-| POST | `/otp/verify` | — | Verify a code; signs in, verifies email, or resets a password. |
+| POST | `/otp/verify` | — | Verify a code; creates the account (`signup`), signs in, verifies email, or resets a password. |
 | POST | `/refresh` | — | Rotate the refresh token, mint a new access token. |
 | POST | `/logout` | — | Revoke the supplied refresh token. |
 | GET | `/me` | ✔ | Current user with organizer profile if any. |
 | PATCH | `/me` | ✔ | Update name, phone, avatar, home city. |
 | POST | `/change-password` | ✔ | Change password; revokes every session. |
 
+### Signup is two steps
+
+Email verification is mandatory. `POST /auth/register` does **not** create a user: it parks the
+submitted details in `pending_registrations` and emails a 6-digit code. The `users` row is created
+by `POST /auth/otp/verify` with `purpose: "signup"`, which returns a session like `/auth/login`.
+
+An address that is never verified therefore has no account at all — it cannot sign in, does not
+appear in admin, and does not hold the email/phone unique indexes. Pending rows expire after 24
+hours and are deleted by the `purge-pending-registrations` job.
+
 ```http
 POST /auth/register
 { "fullName": "Aarav Sharma", "email": "aarav@example.com", "password": "hunter2secure",
   "phone": "9876543210", "role": "organizer", "organizerName": "Nova Live" }
+
+→ 201 { "email": "aarav@example.com", "otpSent": true }
 ```
+
+```http
+POST /auth/otp/verify
+{ "email": "aarav@example.com", "code": "482913", "purpose": "signup" }
+
+→ 200 { "user": { … }, "accessToken": "…", "refreshToken": "…" }
+```
+
+`POST /auth/otp/request` with `purpose: "signup"` resends the code and extends the pending row's
+lifetime. Signing in with the correct password for an unverified signup returns `403
+EMAIL_NOT_VERIFIED` so the client can route back to the code screen.
 
 Rate limits: 20 attempts / 15 min per email on credential routes; 5 / 10 min on OTP requests.
 

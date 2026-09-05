@@ -3,6 +3,7 @@ import { query } from '../db/pool';
 import { env } from '../config/env';
 import { expireStaleBookings } from '../modules/bookings/booking.service';
 import { purgeExpiredOtps } from '../modules/auth/otp.service';
+import { purgeExpiredRegistrations } from '../modules/auth/auth.service';
 import { sendMail } from '../services/mail.service';
 import { formatEventDate } from '../utils/dates';
 
@@ -108,6 +109,7 @@ export function startScheduler(): void {
   every('complete-finished-events', 15 * 60_000, completeFinishedEvents);
   every('event-reminders', 30 * 60_000, sendEventReminders);
   every('purge-otps', 6 * 60 * 60_000, purgeExpiredOtps);
+  every('purge-pending-registrations', 6 * 60 * 60_000, purgeExpiredRegistrations);
 
   // Kick off one immediate pass so a restart does not wait a full interval.
   void releaseExpiredHolds().catch(() => undefined);

@@ -22,7 +22,7 @@ export default function RegisterPage() {
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { register, signIn } = useAuth();
+  const { register } = useAuth();
   const toast = useToast();
 
   const next = searchParams.get('next') ?? '';
@@ -71,14 +71,18 @@ function RegisterForm() {
         organizerName: role === 'organizer' ? form.organizerName.trim() : undefined,
       });
 
-      // Sign the new account straight in — asking them to log in immediately
-      // after registering is friction with no security benefit.
-      const user = await signIn(form.email.trim(), form.password);
-      toast.success('Account created', 'Check your inbox to verify your email.');
+      // No account exists yet — the server is holding these details until the
+      // emailed code comes back, and creating it is that step's side effect.
+      // So there is nothing to sign in to; go straight to the code screen.
+      toast.toast({
+        tone: 'info',
+        title: 'Check your email',
+        description: `We sent a 6-digit code to ${form.email.trim()}.`,
+      });
 
-      if (next) router.push(next);
-      else router.push(user.role === 'organizer' ? '/organizer' : '/events');
-      router.refresh();
+      const fallback = role === 'organizer' ? '/organizer' : '/events';
+      const params = new URLSearchParams({ email: form.email.trim(), next: next || fallback });
+      router.push(`/auth/verify-email?${params.toString()}`);
     } catch (err) {
       setApiError(err instanceof ApiError ? (err.fieldMessages[0] ?? err.message) : 'Could not create your account');
     } finally {
@@ -202,8 +206,12 @@ function RegisterForm() {
             )}
 
             <Button type="submit" size="lg" className="w-full" loading={loading}>
-              Create account
+              Continue
             </Button>
+
+            <p className="text-center text-xs text-ink-500">
+              We’ll email you a 6-digit code to confirm your address. Your account is created once you enter it.
+            </p>
           </form>
 
           <p className="mt-5 text-center text-xs leading-relaxed text-ink-500">
