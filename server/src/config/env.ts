@@ -106,7 +106,7 @@ export const env = {
 
   mail: {
     resendApiKey: optional('RESEND_API_KEY'),
-    from: str('MAIL_FROM', 'Evento <tickets@evento.test>'),
+    from: str('MAIL_FROM', 'Tixit <tickets@tixit.in>'),
     get enabled(): boolean {
       return Boolean(optional('RESEND_API_KEY'));
     },

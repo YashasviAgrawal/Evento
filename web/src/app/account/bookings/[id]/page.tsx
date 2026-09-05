@@ -70,7 +70,7 @@ function BookingView({ bookingId }: { bookingId: string }) {
   async function handleDownload() {
     setDownloading(true);
     try {
-      await downloadFile(`/tickets/booking/${bookingId}/download`, `evento-${booking?.bookingCode ?? bookingId}.pdf`);
+      await downloadFile(`/tickets/booking/${bookingId}/download`, `tixit-${booking?.bookingCode ?? bookingId}.pdf`);
     } catch {
       toast.error('Download failed', 'Please try again in a moment.');
     } finally {
@@ -271,7 +271,7 @@ function BookingView({ bookingId }: { bookingId: string }) {
                     startsAt: booking.event.startsAt,
                     endsAt: booking.event.endsAt,
                   }}
-                  filename={`evento-${booking.bookingCode}.ics`}
+                  filename={`tixit-${booking.bookingCode}.ics`}
                 />
                 <Button variant="outline" onClick={() => window.print()}>
                   <Printer className="h-4 w-4" />

@@ -55,7 +55,7 @@ export default function AdminOverviewPage() {
   async function exportAll() {
     setExporting(true);
     try {
-      await downloadFile('/admin/reports/export', `evento-platform-${new Date().toISOString().slice(0, 10)}.csv`);
+      await downloadFile('/admin/reports/export', `tixit-platform-${new Date().toISOString().slice(0, 10)}.csv`);
       toast.success('Export downloaded');
     } catch {
       toast.error('Export failed');

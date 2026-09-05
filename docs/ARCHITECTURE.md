@@ -1,6 +1,6 @@
 # Architecture
 
-How Evento is put together, and why the load-bearing decisions were made the way they were.
+How Tixit is put together, and why the load-bearing decisions were made the way they were.
 
 ---
 

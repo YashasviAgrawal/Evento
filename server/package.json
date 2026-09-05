@@ -1,8 +1,8 @@
 {
-  "name": "@evento/server",
+  "name": "@tixit/server",
   "version": "1.0.0",
   "private": true,
-  "description": "Evento REST API — Express + PostgreSQL",
+  "description": "Tixit REST API — Express + PostgreSQL",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

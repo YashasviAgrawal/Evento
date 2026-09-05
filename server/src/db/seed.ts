@@ -301,7 +301,11 @@ async function clearDemoData(): Promise<void> {
       ticket_types, events, venues, coupons, notifications, audit_logs, otp_codes, refresh_tokens, organizers
     RESTART IDENTITY CASCADE
   `);
-  await query(`DELETE FROM users WHERE email LIKE '%@evento.test' OR email LIKE '%@example.com'`);
+  // '@evento.test' is the pre-rebrand demo domain — still cleaned up so a dev
+  // database seeded before the Tixit rename does not keep orphaned accounts.
+  await query(
+    `DELETE FROM users WHERE email LIKE '%@tixit.test' OR email LIKE '%@evento.test' OR email LIKE '%@example.com'`,
+  );
 }
 
 async function seed(): Promise<void> {
@@ -312,16 +316,16 @@ async function seed(): Promise<void> {
   /* ── users ── */
   const admin = await queryOne<{ id: string }>(
     `INSERT INTO users (full_name, email, phone, password_hash, role, email_verified_at)
-     VALUES ('Platform Admin', 'admin@evento.test', '9800000001', $1, 'admin', now())
+     VALUES ('Platform Admin', 'admin@tixit.test', '9800000001', $1, 'admin', now())
      RETURNING id`,
     [passwordHash],
   );
 
   const organizerSpecs = [
-    { name: 'Yashasvi Agrawal', email: 'organizer@evento.test', brand: 'Nova Live Entertainment', phone: '9800000002', bio: 'India’s leading live-music promoter. 400+ shows since 2015 across 22 cities.', status: 'verified' },
-    { name: 'Priya Nair', email: 'priya@evento.test', brand: 'Curtain Call Productions', phone: '9800000003', bio: 'Theatre, comedy and cultural programming with a focus on regional talent.', status: 'verified' },
-    { name: 'Rahul Mehta', email: 'rahul@evento.test', brand: 'Learnscape Collective', phone: '9800000004', bio: 'Workshops, bootcamps and conferences for builders and creatives.', status: 'verified' },
-    { name: 'Sana Kapoor', email: 'sana@evento.test', brand: 'Pulse Events Co.', phone: '9800000005', bio: 'Newly registered organizer awaiting verification.', status: 'pending' },
+    { name: 'Yashasvi Agrawal', email: 'organizer@tixit.test', brand: 'Nova Live Entertainment', phone: '9800000002', bio: 'India’s leading live-music promoter. 400+ shows since 2015 across 22 cities.', status: 'verified' },
+    { name: 'Priya Nair', email: 'priya@tixit.test', brand: 'Curtain Call Productions', phone: '9800000003', bio: 'Theatre, comedy and cultural programming with a focus on regional talent.', status: 'verified' },
+    { name: 'Rahul Mehta', email: 'rahul@tixit.test', brand: 'Learnscape Collective', phone: '9800000004', bio: 'Workshops, bootcamps and conferences for builders and creatives.', status: 'verified' },
+    { name: 'Sana Kapoor', email: 'sana@tixit.test', brand: 'Pulse Events Co.', phone: '9800000005', bio: 'Newly registered organizer awaiting verification.', status: 'pending' },
   ];
 
   const organizers: Array<{ id: string; userId: string; brand: string }> = [];
@@ -352,7 +356,7 @@ async function seed(): Promise<void> {
   }
 
   const customerSpecs = [
-    ['Aarav Sharma', 'customer@evento.test', '9900000001'],
+    ['Aarav Sharma', 'customer@tixit.test', '9900000001'],
     ['Diya Patel', 'diya@example.com', '9900000002'],
     ['Kabir Singh', 'kabir@example.com', '9900000003'],
     ['Meera Iyer', 'meera@example.com', '9900000004'],
@@ -480,7 +484,7 @@ async function seed(): Promise<void> {
      VALUES
        ('WELCOME10', '10% off your first booking',        'percent', 10, $1, $2, 1000, 1, now() + INTERVAL '90 days', $5, true),
        ('FLAT200',   E'\\u20B9200 off orders above \\u20B91000', 'flat', $3, NULL, $4, 500, 2, now() + INTERVAL '60 days', $5, true),
-       ('EVENTO25',  '25% off, up to \\u20B9500',          'percent', 25, $6, $2, 200, 1, now() + INTERVAL '30 days', $5, true),
+       ('TIXIT25',   '25% off, up to \\u20B9500',          'percent', 25, $6, $2, 200, 1, now() + INTERVAL '30 days', $5, true),
        ('EXPIRED50', 'Expired test coupon',                'percent', 50, NULL, 0, 100, 1, now() - INTERVAL '1 day',  $5, true)`,
     [
       rupeesToPaise(1000),
@@ -646,17 +650,17 @@ async function seed(): Promise<void> {
 
   process.stdout.write(`
 ┌──────────────────────────────────────────────────────────────┐
-│  Evento demo accounts — password for all: ${PASSWORD}      │
+│  Tixit demo accounts — password for all: ${PASSWORD}         │
 ├──────────────────────────────────────────────────────────────┤
-│  Admin      admin@evento.test                                │
-│  Organizer  organizer@evento.test   (verified)               │
-│             priya@evento.test       (verified)               │
-│             rahul@evento.test       (verified)               │
-│             sana@evento.test        (pending verification)   │
-│  Customer   customer@evento.test                             │
+│  Admin      admin@tixit.test                                 │
+│  Organizer  organizer@tixit.test    (verified)               │
+│             priya@tixit.test        (verified)               │
+│             rahul@tixit.test        (verified)               │
+│             sana@tixit.test         (pending verification)   │
+│  Customer   customer@tixit.test                              │
 │             diya@example.com                                 │
 ├──────────────────────────────────────────────────────────────┤
-│  Coupons    WELCOME10 · FLAT200 · EVENTO25                   │
+│  Coupons    WELCOME10 · FLAT200 · TIXIT25                    │
 └──────────────────────────────────────────────────────────────┘
 `);
 }

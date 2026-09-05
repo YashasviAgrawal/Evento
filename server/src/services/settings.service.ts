@@ -25,7 +25,7 @@ const DEFAULTS: PlatformSettings = {
   booking_hold_minutes: env.business.bookingHoldMinutes,
   refund_window_hours: 48,
   support_email: 'support@tixit.in',
-  platform_name: 'Evento',
+  platform_name: 'Tixit',
   auto_approve_events: false,
 };
 

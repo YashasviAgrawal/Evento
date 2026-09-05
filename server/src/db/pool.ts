@@ -18,7 +18,7 @@ export const pool = new Pool({
   ssl: env.db.ssl ? { rejectUnauthorized: false } : undefined,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 10_000,
-  application_name: 'evento-api',
+  application_name: 'tixit-api',
 });
 
 pool.on('error', (err) => {

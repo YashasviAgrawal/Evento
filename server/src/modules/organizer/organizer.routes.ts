@@ -243,7 +243,7 @@ router.get(
       { header: 'Booked At', value: (r) => r.booked_at.toISOString() },
     ]);
 
-    return sendCsv(res, csvFilename('evento-attendees'), csv);
+    return sendCsv(res, csvFilename('tixit-attendees'), csv);
   }),
 );
 

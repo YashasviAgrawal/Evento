@@ -43,7 +43,7 @@ export default function OrganizerReportsPage() {
   async function exportCsv() {
     setExporting(true);
     try {
-      await downloadFile('/organizer/bookings/export', `evento-report-${new Date().toISOString().slice(0, 10)}.csv`);
+      await downloadFile('/organizer/bookings/export', `tixit-report-${new Date().toISOString().slice(0, 10)}.csv`);
       toast.success('Report downloaded');
     } catch {
       toast.error('Export failed');
