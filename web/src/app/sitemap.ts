@@ -36,7 +36,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [events, categories, cities] = await Promise.all([
     listAllPublishedEvents(),
     fetchPublic<Category[]>('/catalog/categories', undefined, 3600),
-    fetchPublic<City[]>('/catalog/cities', undefined, 3600),
+    // The catalogue covers every city in India; only the ones that actually
+    // have something on are worth spending crawl budget on.
+    fetchPublic<City[]>('/catalog/cities', { hasEvents: 'true', counts: 'false' }, 3600),
   ]);
 
   const now = new Date();

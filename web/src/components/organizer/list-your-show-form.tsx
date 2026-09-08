@@ -5,6 +5,7 @@ import { Send } from 'lucide-react';
 import type { Category, City } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Alert, Field, Input, Select, Textarea } from '@/components/ui/index';
+import { CityPicker } from '@/components/ui/city-picker';
 
 const ENQUIRY_EMAIL = 'support@tixit.in';
 
@@ -130,15 +131,16 @@ export function ListYourShowForm({ categories, cities }: { categories: Category[
         </Field>
 
         <Field label="City">
-          <Select value={form.city} onChange={(event) => update('city', event.target.value)}>
-            <option value="">Select a city</option>
-            {cities.map((city) => (
-              <option key={city.id} value={city.name}>
-                {city.name}
-              </option>
-            ))}
-            <option value="Other">Somewhere else</option>
-          </Select>
+          <CityPicker
+            cities={cities}
+            value={form.city}
+            valueKey="name"
+            onChange={(city) => update('city', city)}
+            allLabel="Somewhere else"
+            emptyLabel="Select a city"
+            placeholder="Search any city in India…"
+            ariaLabel="Event city"
+          />
         </Field>
 
         <Field label="What are you listing?">

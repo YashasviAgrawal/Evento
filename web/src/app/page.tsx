@@ -19,7 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { fetchPublic } from '@/lib/api';
-import type { HomeFeed } from '@/lib/types';
+import type { City, HomeFeed } from '@/lib/types';
 import { EventCard } from '@/components/events/event-card';
 import { Hero } from '@/components/home/hero';
 import { ButtonLink } from '@/components/ui/button';
@@ -49,7 +49,12 @@ function CategoryIcon({ name, className }: { name: string | null; className?: st
 }
 
 export default async function HomePage() {
-  const feed = await fetchPublic<HomeFeed>('/events/home');
+  // The rail below shows the nine curated cities; the hero's picker gets the
+  // full national catalogue so anyone can jump straight to their own town.
+  const [feed, allCities] = await Promise.all([
+    fetchPublic<HomeFeed>('/events/home'),
+    fetchPublic<City[]>('/catalog/cities', undefined, 300),
+  ]);
 
   if (!feed) {
     return (
@@ -65,10 +70,12 @@ export default async function HomePage() {
   }
 
   const totalEvents = feed.categories.reduce((sum, category) => sum + (category.eventCount ?? 0), 0);
+  const cities = allCities ?? feed.popularCities;
+  const citiesWithEvents = cities.filter((city) => (city.eventCount ?? 0) > 0).length;
 
   return (
     <>
-      <Hero cities={feed.popularCities} stats={{ events: totalEvents, cities: feed.popularCities.length }} />
+      <Hero cities={cities} stats={{ events: totalEvents, cities: citiesWithEvents }} />
 
       {/* ── Categories ── */}
       <section className="container-page py-12">
@@ -168,9 +175,18 @@ export default async function HomePage() {
 
       {/* ── Popular cities ── */}
       <section className="container-page py-12">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold tracking-tight text-ink-900">Popular cities</h2>
-          <p className="mt-1 text-sm text-ink-500">Explore what’s on where you are</p>
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-ink-900">Popular cities</h2>
+            <p className="mt-1 text-sm text-ink-500">Explore what’s on where you are</p>
+          </div>
+          <Link
+            href="/events"
+            className="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 transition hover:text-brand-700"
+          >
+            Browse every city in India
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
         </div>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">

@@ -88,6 +88,16 @@ function VerifyEmailForm() {
       setCooldown(RESEND_COOLDOWN_SECONDS);
       toast.toast({ tone: 'info', title: 'Code sent', description: `Check ${email.trim()} for a 6-digit code.` });
     } catch (err) {
+      if (err instanceof ApiError) {
+        // Nothing is being held for this address, so no code can be resent —
+        // the same dead end `submit` handles, reached from the other button.
+        if (err.code === 'REGISTRATION_NOT_FOUND') setExpired(true);
+        // Already a full account: verifying it again is not the way in.
+        if (err.code === 'EMAIL_TAKEN') {
+          router.push(`/auth/login?${new URLSearchParams({ ...(next ? { next } : {}) }).toString()}`);
+          return;
+        }
+      }
       setError(err instanceof ApiError ? err.message : 'Could not send a new code');
     } finally {
       setResending(false);

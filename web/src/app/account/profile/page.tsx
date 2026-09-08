@@ -8,7 +8,8 @@ import type { City } from '@/lib/types';
 import { useAuth } from '@/components/providers/auth-provider';
 import { RequireAuth } from '@/components/auth/require-auth';
 import { Button } from '@/components/ui/button';
-import { Alert, Field, Input, Select, StatusBadge } from '@/components/ui/index';
+import { Alert, Field, Input, StatusBadge } from '@/components/ui/index';
+import { CityPicker } from '@/components/ui/city-picker';
 import { useToast } from '@/components/ui/toast';
 import { formatDateTime, initials } from '@/lib/format';
 
@@ -34,7 +35,7 @@ function Profile() {
 
   useEffect(() => {
     api
-      .get<City[]>('/catalog/cities')
+      .get<City[]>('/catalog/cities?counts=false')
       .then((response) => setCities(response.data))
       .catch(() => setCities([]));
   }, []);
@@ -151,14 +152,14 @@ function Profile() {
           </Field>
 
           <Field label="Home city" hint="We’ll show you events here first">
-            <Select value={form.cityId} onChange={(e) => setForm({ ...form, cityId: e.target.value })}>
-              <option value="">No preference</option>
-              {cities.map((city) => (
-                <option key={city.id} value={city.id}>
-                  {city.name}, {city.state}
-                </option>
-              ))}
-            </Select>
+            <CityPicker
+              cities={cities}
+              value={form.cityId}
+              onChange={(cityId) => setForm({ ...form, cityId })}
+              allLabel="No preference"
+              placeholder="Search any city in India…"
+              ariaLabel="Home city"
+            />
           </Field>
         </div>
 

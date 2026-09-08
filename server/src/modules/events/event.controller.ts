@@ -137,7 +137,9 @@ export const suggest = asyncHandler(async (req, res) => {
                 WHERE e.city_id = c.id AND e.status = 'published' AND e.ends_at > now()) AS event_count
          FROM cities c
         WHERE c.name ILIKE $1 || '%'
-        ORDER BY c.display_order ASC
+        -- The catalogue covers all of India, so a prefix can match a dozen
+        -- towns: surface the ones that actually have something on first.
+        ORDER BY event_count DESC, c.display_order ASC
         LIMIT 3`,
       [term],
     ),

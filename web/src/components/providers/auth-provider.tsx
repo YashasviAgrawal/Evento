@@ -17,6 +17,8 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<User>;
   signInWithOtp: (email: string, code: string) => Promise<User>;
+  /** Exchange a Google ID token for a session, creating the account if needed. */
+  signInWithGoogle: (credential: string) => Promise<{ user: User; created: boolean }>;
   verifyEmail: (email: string, code: string, purpose?: VerifyPurpose) => Promise<User>;
   register: (input: {
     fullName: string;
@@ -107,6 +109,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   /**
+   * One call covers both signing in and signing up: the server decides which,
+   * based on whether the verified Google address already has an account, and
+   * reports back with `created` so the UI can greet a new user differently.
+   */
+  const signInWithGoogle = useCallback(
+    async (credential: string) => {
+      const { data } = await api.post<SessionResponse & { created: boolean }>('/auth/google', { credential });
+      return { user: persist(data), created: data.created };
+    },
+    [persist],
+  );
+
+  /**
    * Redeem the code mailed at registration. The API answers with a session in
    * both flows, so persisting it signs in the account that was just created
    * (signup) or refreshes the cached user with `emailVerified: true`.
@@ -150,12 +165,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading: !hydrated || loading,
       signIn,
       signInWithOtp,
+      signInWithGoogle,
       verifyEmail,
       register,
       signOut,
       refreshUser: loadSession,
     }),
-    [hydrated, user, loading, signIn, signInWithOtp, verifyEmail, register, signOut, loadSession],
+    [
+      hydrated,
+      user,
+      loading,
+      signIn,
+      signInWithOtp,
+      signInWithGoogle,
+      verifyEmail,
+      register,
+      signOut,
+      loadSession,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

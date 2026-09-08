@@ -102,6 +102,22 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   return url.toString();
 }
 
+/**
+ * 401s that mean "this sign-in attempt failed", not "your session died".
+ *
+ * Any other 401 clears the stored tokens, which is right for an expired
+ * session but wrong here: a signed-in user who mistypes a password on the
+ * login page, or whose Google token was rejected, must not be logged out of
+ * the session they already had.
+ */
+const SIGN_IN_FAILURE_CODES = new Set([
+  'INVALID_CREDENTIALS',
+  'EMAIL_NOT_REGISTERED',
+  'USE_GOOGLE_SIGN_IN',
+  'GOOGLE_TOKEN_INVALID',
+  'GOOGLE_EMAIL_UNVERIFIED',
+]);
+
 let refreshInFlight: Promise<boolean> | null = null;
 
 /** Exchange the refresh token for a new access token. De-duplicated. */
@@ -173,7 +189,7 @@ async function request<T>(path: string, options: RequestOptions = {}, isRetry = 
     if (response.status === 401 && !isRetry && error.code === 'TOKEN_EXPIRED' && (await refreshAccessToken())) {
       return request<T>(path, options, true);
     }
-    if (response.status === 401 && isBrowser && error.code !== 'INVALID_CREDENTIALS') {
+    if (response.status === 401 && isBrowser && !SIGN_IN_FAILURE_CODES.has(error.code)) {
       tokenStore.clear();
     }
 

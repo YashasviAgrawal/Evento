@@ -6,7 +6,8 @@ import { api, ApiError } from '@/lib/api';
 import type { City } from '@/lib/types';
 import { PageHeader } from '@/components/dashboard/shell';
 import { Button } from '@/components/ui/button';
-import { Alert, Field, Input, Select, Skeleton, Textarea } from '@/components/ui/index';
+import { Alert, Field, Input, Skeleton, Textarea } from '@/components/ui/index';
+import { CityPicker } from '@/components/ui/city-picker';
 import { useToast } from '@/components/ui/toast';
 
 interface OrganizerProfile {
@@ -50,7 +51,7 @@ export default function OrganizerSettingsPage() {
       try {
         const [profileResponse, cityResponse] = await Promise.all([
           api.get<OrganizerProfile>('/organizer/profile'),
-          api.get<City[]>('/catalog/cities'),
+          api.get<City[]>('/catalog/cities?counts=false'),
         ]);
         const data = profileResponse.data;
         setProfile(data);
@@ -185,14 +186,14 @@ export default function OrganizerSettingsPage() {
             </Field>
 
             <Field label="City">
-              <Select value={form.cityId} onChange={(e) => setForm({ ...form, cityId: e.target.value })}>
-                <option value="">Select a city…</option>
-                {cities.map((city) => (
-                  <option key={city.id} value={city.id}>
-                    {city.name}
-                  </option>
-                ))}
-              </Select>
+              <CityPicker
+                cities={cities}
+                value={form.cityId}
+                onChange={(cityId) => setForm({ ...form, cityId })}
+                emptyLabel="Select a city…"
+                placeholder="Search any city in India…"
+                ariaLabel="Organizer city"
+              />
             </Field>
 
             <Field label="Registered address" className="sm:col-span-2">

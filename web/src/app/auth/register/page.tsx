@@ -9,6 +9,7 @@ import { useAuth } from '@/components/providers/auth-provider';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Alert, Field, Input, Spinner } from '@/components/ui/index';
+import { GoogleButton } from '@/components/auth/google-button';
 import { cn } from '@/lib/format';
 
 export default function RegisterPage() {
@@ -22,7 +23,7 @@ export default function RegisterPage() {
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { register } = useAuth();
+  const { register, signInWithGoogle } = useAuth();
   const toast = useToast();
 
   const next = searchParams.get('next') ?? '';
@@ -31,7 +32,9 @@ function RegisterForm() {
   );
   const [form, setForm] = useState({
     fullName: '',
-    email: '',
+    // Prefilled when someone arrives from the "that email is not registered"
+    // message on the login page, so they do not retype what they just typed.
+    email: searchParams.get('email') ?? '',
     phone: '',
     password: '',
     organizerName: '',
@@ -90,6 +93,24 @@ function RegisterForm() {
     }
   }
 
+  /**
+   * Google has already proven the address, so this account skips the emailed
+   * code entirely and the person is signed in on the spot. The role chosen
+   * above is not carried across: Google signup always creates a customer, and
+   * an organizer profile is added later from the dashboard.
+   */
+  async function handleGoogle(credential: string) {
+    setApiError(null);
+    try {
+      const { user, created } = await signInWithGoogle(credential);
+      toast.success(created ? `Welcome to Tixit, ${user.fullName.split(' ')[0]}` : 'Welcome back');
+      router.push(next || (user.role === 'organizer' ? '/organizer' : '/events'));
+      router.refresh();
+    } catch (err) {
+      setApiError(err instanceof ApiError ? err.message : 'Could not sign you up with Google');
+    }
+  }
+
   return (
     <div className="container-page grid min-h-[calc(100vh-4rem)] place-items-center py-10">
       <div className="w-full max-w-md">
@@ -106,6 +127,13 @@ function RegisterForm() {
             <h1 className="text-xl font-bold tracking-tight text-ink-900">Create your account</h1>
             <p className="mt-1 text-sm text-ink-500">Book tickets, or start selling your own</p>
           </div>
+
+          <GoogleButton
+            onCredential={handleGoogle}
+            text="signup_with"
+            dividerLabel="or sign up with email"
+            disabled={loading}
+          />
 
           <div className="mb-6 grid grid-cols-2 gap-2">
             {(

@@ -5,6 +5,7 @@ import { validate } from '../../middleware/validate';
 import * as controller from './auth.controller';
 import {
   changePasswordSchema,
+  googleAuthSchema,
   loginSchema,
   refreshSchema,
   registerSchema,
@@ -17,6 +18,7 @@ const router = Router();
 
 router.post('/register', authLimiter, validate({ body: registerSchema }), controller.register);
 router.post('/login', authLimiter, validate({ body: loginSchema }), controller.login);
+router.post('/google', authLimiter, validate({ body: googleAuthSchema }), controller.googleAuth);
 router.post('/otp/request', otpLimiter, validate({ body: requestOtpSchema }), controller.requestOtp);
 router.post('/otp/verify', authLimiter, validate({ body: verifyOtpSchema }), controller.verifyOtp);
 router.post('/refresh', validate({ body: refreshSchema }), controller.refresh);
