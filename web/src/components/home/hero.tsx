@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CalendarDays, MapPin, Search, TicketCheck } from 'lucide-react';
+import { CalendarDays, Search, TicketCheck } from 'lucide-react';
 import type { City } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import { CityPicker } from '@/components/ui/city-picker';
 import { SearchBox } from '@/components/search/search-box';
 
 const QUICK_FILTERS = [
@@ -87,21 +88,19 @@ export function Hero({ cities, stats }: { cities: City[]; stats: { events: numbe
               />
             </div>
 
-            <div className="relative md:w-44 md:border-l md:border-ink-200">
-              <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-ink-400" aria-hidden />
-              <select
+            <div className="md:w-48 md:border-l md:border-ink-200">
+              <CityPicker
+                cities={cities}
                 value={city}
-                onChange={(event) => setCity(event.target.value)}
-                aria-label="Filter by city"
-                className="h-12 w-full cursor-pointer appearance-none rounded-lg border-0 bg-transparent pl-11 pr-3 text-sm text-ink-900 focus:outline-none focus:ring-0"
-              >
-                <option value="">All cities</option>
-                {cities.map((entry) => (
-                  <option key={entry.id} value={entry.slug}>
-                    {entry.name}
-                  </option>
-                ))}
-              </select>
+                valueKey="slug"
+                onChange={setCity}
+                allLabel="All cities"
+                placeholder="Search any city in India…"
+                showState={false}
+                showCounts
+                triggerClassName="h-12 rounded-lg border-0 bg-transparent px-3.5 shadow-none focus:border-0 focus:ring-0"
+                ariaLabel="Filter by city"
+              />
             </div>
 
             <div className="relative md:w-40 md:border-l md:border-ink-200">

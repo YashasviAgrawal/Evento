@@ -7,6 +7,7 @@ import { api, ApiError, API_URL, tokenStore } from '@/lib/api';
 import type { Category, City } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Alert, Field, Input, Select, Textarea } from '@/components/ui/index';
+import { CityPicker } from '@/components/ui/city-picker';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/format';
 
@@ -86,7 +87,9 @@ export function EventForm({ eventId }: { eventId?: string }) {
       try {
         const [categoryResponse, cityResponse] = await Promise.all([
           api.get<Category[]>('/catalog/categories'),
-          api.get<City[]>('/catalog/cities'),
+          // Every city in India, so a show can be hosted anywhere. The picker
+          // searches client-side, and counts are irrelevant when picking a venue.
+          api.get<City[]>('/catalog/cities?counts=false'),
         ]);
         setCategories(categoryResponse.data);
         setCities(cityResponse.data);
@@ -425,19 +428,16 @@ export function EventForm({ eventId }: { eventId?: string }) {
           />
         </Field>
 
-        <Field label="City" required error={errors.cityId}>
-          <Select
+        <Field label="City" required error={errors.cityId} hint="Anywhere in India — search for your city or town">
+          <CityPicker
+            cities={cities}
             value={form.cityId}
-            onChange={(e) => setForm({ ...form, cityId: e.target.value })}
+            onChange={(cityId) => setForm({ ...form, cityId })}
+            emptyLabel="Choose a city…"
+            placeholder="Search 500+ cities across India…"
             invalid={Boolean(errors.cityId)}
-          >
-            <option value="">Choose a city…</option>
-            {cities.map((city) => (
-              <option key={city.id} value={city.id}>
-                {city.name}, {city.state}
-              </option>
-            ))}
-          </Select>
+            ariaLabel="Event city"
+          />
         </Field>
 
         <Field label="Address" required error={errors.addressLine1} className="sm:col-span-2">

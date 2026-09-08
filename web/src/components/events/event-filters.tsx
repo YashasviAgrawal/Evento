@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { SlidersHorizontal, X } from 'lucide-react';
 import type { Category, City } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import { CityPicker } from '@/components/ui/city-picker';
 import { cn } from '@/lib/format';
 
 const WHEN_OPTIONS = [
@@ -108,19 +109,17 @@ export function EventFilters({
       </FilterGroup>
 
       <FilterGroup title="City">
-        <select
+        <CityPicker
+          cities={cities}
           value={searchParams.get('city') ?? ''}
-          onChange={(event) => setParam('city', event.target.value || null)}
-          className="input"
-          aria-label="Filter by city"
-        >
-          <option value="">All cities</option>
-          {cities.map((city) => (
-            <option key={city.id} value={city.slug}>
-              {city.name} {city.eventCount ? `(${city.eventCount})` : ''}
-            </option>
-          ))}
-        </select>
+          valueKey="slug"
+          onChange={(slug) => setParam('city', slug || null)}
+          allLabel="All cities"
+          placeholder="Search any city in India…"
+          showCounts
+          showState={false}
+          ariaLabel="Filter by city"
+        />
       </FilterGroup>
     </div>
   );

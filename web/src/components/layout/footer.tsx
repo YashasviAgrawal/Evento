@@ -44,7 +44,19 @@ const COLUMNS = [
   },
 ];
 
-const CITIES = ['Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad', 'Pune', 'Chennai', 'Kolkata', 'Goa'];
+// Mirrors the `is_popular` cities seeded in migration 0009, in the same order.
+const CITIES = [
+  'Jaipur',
+  'Mumbai',
+  'Delhi',
+  'Bengaluru',
+  'Hyderabad',
+  'Pune',
+  'Chennai',
+  'Kolkata',
+  'Ahmedabad',
+  'Goa',
+];
 
 export function Footer() {
   return (

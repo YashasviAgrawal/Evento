@@ -18,7 +18,20 @@ const router = Router();
 router.get(
   '/cities',
   asyncHandler(async (req, res) => {
+    // The catalogue covers every state and UT of India (see migration 0009),
+    // so callers narrow it down:
+    //   popular=true    the nine curated cities behind the home-page rail
+    //   hasEvents=true  only cities that currently have something published
+    //   search=<text>   name / state match, for the city picker's search box
+    //   counts=false    skip the per-city event count (a picker doesn't need
+    //                   it, and it saves one correlated subquery per row)
+    //   limit=<n>       cap the result set (1–1000)
     const popularOnly = req.query.popular === 'true';
+    const hasEventsOnly = req.query.hasEvents === 'true';
+    const withCounts = req.query.counts !== 'false';
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const limitParam = Number(req.query.limit);
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(Math.trunc(limitParam), 1), 1000) : null;
 
     // Optional filter params — when provided, the event_count subquery only
     // counts events matching ALL of these, keeping counts consistent with the
@@ -116,19 +129,58 @@ router.get(
 
     const extraWhere = extraClauses.length > 0 ? `AND ${extraClauses.join(' AND ')}` : '';
 
+    // Without the count subquery those params are never referenced, and
+    // Postgres rejects a bind that supplies more parameters than the statement
+    // uses — so drop them and renumber from scratch.
+    if (!withCounts) {
+      extraParams.length = 0;
+      paramIndex = 0;
+    }
+
+    // Which cities to return. Note these are deliberately independent of the
+    // count filters above: a city stays in the list even when the current
+    // category/date filters leave it with zero matching events, so the
+    // selected city never disappears from the picker mid-search.
+    const cityClauses: string[] = [];
+    if (popularOnly) cityClauses.push('c.is_popular = true');
+    if (hasEventsOnly) {
+      cityClauses.push(
+        `EXISTS (SELECT 1 FROM events e
+                  WHERE e.city_id = c.id AND e.status = 'published' AND e.ends_at > now())`,
+      );
+    }
+    if (search) {
+      paramIndex++;
+      cityClauses.push(`(c.name ILIKE '%' || $${paramIndex} || '%' OR c.state ILIKE '%' || $${paramIndex} || '%')`);
+      extraParams.push(search);
+    }
+
+    let limitClause = '';
+    if (limit !== null) {
+      paramIndex++;
+      limitClause = `LIMIT $${paramIndex}`;
+      extraParams.push(limit);
+    }
+
+    const cityWhere = cityClauses.length > 0 ? `WHERE ${cityClauses.join(' AND ')}` : '';
+    const countSelect = withCounts
+      ? `(SELECT count(*)::int FROM events e
+           ${joinParts}
+           WHERE e.city_id = c.id AND e.status = 'published' AND e.ends_at > now()
+           ${extraWhere})`
+      : '0';
+
     // Cache less aggressively when filters are applied since counts are context-dependent.
-    const cacheMaxAge = extraParams.length > 0 ? 15 : 300;
+    const cacheMaxAge = withCounts && extraClauses.length > 0 ? 15 : 300;
 
     const rows = await cached(`catalog:cities:${req.originalUrl}`, cacheMaxAge * 1000, async () => {
       const { rows } = await query(
         `SELECT c.id, c.name, c.slug, c.state, c.image_url, c.is_popular,
-                (SELECT count(*)::int FROM events e
-                  ${joinParts}
-                  WHERE e.city_id = c.id AND e.status = 'published' AND e.ends_at > now()
-                  ${extraWhere}) AS event_count
+                ${countSelect} AS event_count
            FROM cities c
-          ${popularOnly ? 'WHERE c.is_popular = true' : ''}
-          ORDER BY c.display_order ASC, c.name ASC`,
+          ${cityWhere}
+          ORDER BY c.display_order ASC, c.name ASC
+          ${limitClause}`,
         extraParams,
       );
       return rows;

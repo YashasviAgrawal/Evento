@@ -229,7 +229,7 @@ function CategoryIcon({ name, className }: { name: string | null; className?: st
 export default async function ListYourShowPage() {
   const [categories, cities] = await Promise.all([
     fetchPublic<Category[]>('/catalog/categories', undefined, 3600),
-    fetchPublic<City[]>('/catalog/cities', undefined, 3600),
+    fetchPublic<City[]>('/catalog/cities', { counts: 'false' }, 3600),
   ]);
 
   const categoryChips =

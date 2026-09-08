@@ -110,7 +110,7 @@ Rate limits: 20 attempts / 15 min per email on credential routes; 5 / 10 min on 
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
-| GET | `/cities` | — | Cities with live-event counts. `?popular=true` to filter. |
+| GET | `/cities` | — | Every city in India with live-event counts. `?popular=true` (the nine curated cities), `?hasEvents=true` (only cities with published events), `?search=` (name/state), `?counts=false` (skip the per-city count), `?limit=`. |
 | GET | `/categories` | — | Active categories with counts, icon and colour. |
 | GET | `/venues` | organizer | Shared venues plus the caller's own. |
 | POST | `/venues` | organizer | Create a venue. |
