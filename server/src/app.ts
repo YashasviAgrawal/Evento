@@ -111,6 +111,7 @@ export function createApp(): Express {
           razorpay: env.razorpay.enabled ? 'live' : 'mock',
           email: env.mail.enabled ? 'resend' : 'console',
           storage: env.storage.cloudinaryEnabled ? 'cloudinary' : 'local',
+          googleAuth: env.google.enabled ? 'configured' : 'disabled',
         },
         timestamp: new Date().toISOString(),
       },

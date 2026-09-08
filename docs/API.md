@@ -35,7 +35,8 @@ Common error codes: `VALIDATION_ERROR` (422), `UNAUTHORIZED`/`TOKEN_EXPIRED` (40
 | --- | --- | --- | --- |
 | POST | `/register` | — | Start a signup. Holds the details and emails a code — **no account is created here**. |
 | POST | `/login` | — | Email + password. Returns user, access and refresh tokens. |
-| POST | `/otp/request` | — | Email a one-time code. Never reveals whether the address exists. |
+| POST | `/google` | — | Exchange a Google ID token for a session, creating the account on first use. |
+| POST | `/otp/request` | — | Email a one-time code. Rejects an address with no account. |
 | POST | `/otp/verify` | — | Verify a code; creates the account (`signup`), signs in, verifies email, or resets a password. |
 | POST | `/refresh` | — | Rotate the refresh token, mint a new access token. |
 | POST | `/logout` | — | Revoke the supplied refresh token. |
@@ -69,8 +70,37 @@ POST /auth/otp/verify
 ```
 
 `POST /auth/otp/request` with `purpose: "signup"` resends the code and extends the pending row's
-lifetime. Signing in with the correct password for an unverified signup returns `403
-EMAIL_NOT_VERIFIED` so the client can route back to the code screen.
+lifetime. Signing in against an unverified signup returns `403 EMAIL_NOT_VERIFIED` so the client
+can route back to the code screen.
+
+### Unregistered addresses are reported, not hidden
+
+`/login` and `/otp/request` answer `401 EMAIL_NOT_REGISTERED` when no account exists, instead of
+the older silent success. That is a deliberate trade: it makes these routes an account-enumeration
+oracle, and the rate limits below are what stop the disclosure being harvested in bulk. It was
+chosen because the silent version stranded real users, who could not tell a mistyped address from
+an undelivered code.
+
+Related codes: `USE_GOOGLE_SIGN_IN` (the account has no password), `EMAIL_NOT_VERIFIED` (a signup
+is pending), `EMAIL_TAKEN` (resending a signup code to an address that is already an account).
+
+### Continue with Google
+
+The browser gets an ID token from Google Identity Services and posts it here. The server verifies
+the signature and that `aud` is our own `GOOGLE_CLIENT_ID`, then matches on Google's `sub` claim,
+falling back to the verified email so a password account and a Google sign-in converge on one
+users row. An unknown address creates an account, already verified — no code is emailed.
+
+```http
+POST /auth/google
+{ "credential": "<Google ID token>" }
+
+→ 200 { "user": { … }, "accessToken": "…", "refreshToken": "…", "created": false }
+→ 201 same shape with "created": true when the account was just created
+```
+
+Requires `GOOGLE_CLIENT_ID` on the API and `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in the web bundle. With
+neither set the endpoint answers `503 GOOGLE_NOT_CONFIGURED` and the web button is not rendered.
 
 Rate limits: 20 attempts / 15 min per email on credential routes; 5 / 10 min on OTP requests.
 

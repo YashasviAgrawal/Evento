@@ -104,6 +104,17 @@ export const env = {
     },
   },
 
+  google: {
+    // The OAuth 2.0 Web client ID from the Google Cloud console. The browser
+    // needs the same value (NEXT_PUBLIC_GOOGLE_CLIENT_ID) to render the button;
+    // the server needs it to check that an ID token was minted for *this* app
+    // and not for some other site the user also signed into with Google.
+    clientId: optional('GOOGLE_CLIENT_ID'),
+    get enabled(): boolean {
+      return Boolean(optional('GOOGLE_CLIENT_ID'));
+    },
+  },
+
   mail: {
     resendApiKey: optional('RESEND_API_KEY'),
     from: str('MAIL_FROM', 'Tixit <tickets@tixit.in>'),

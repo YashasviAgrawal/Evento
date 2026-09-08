@@ -15,6 +15,7 @@ import { sendMailAsync } from '../../services/mail.service';
 import { audit } from '../../services/audit.service';
 import type { Role } from '../../middleware/auth';
 import { issueOtp, verifyOtp, type OtpPurpose } from './otp.service';
+import { verifyGoogleIdToken } from './google.service';
 import { issueRefreshToken, revokeAllForUser, signAccessToken } from './token.service';
 import type { ChangePasswordInput, LoginInput, RegisterInput, UpdateProfileInput } from './auth.schema';
 
@@ -282,33 +283,168 @@ async function completeRegistration(email: string, code: string, context: { ip?:
   return created;
 }
 
+/**
+ * Reject an address that has no account, telling the caller so plainly.
+ *
+ * This is a deliberate trade. Saying "that email is not registered" makes the
+ * endpoint an account-enumeration oracle — anyone can test an address and learn
+ * whether it has an account here. It was chosen anyway because the silent
+ * alternative stranded real users, who had no way to tell a typo'd address from
+ * a wrong password. Rate limiting on these routes is what keeps the disclosure
+ * from being harvestable in bulk, so keep `authLimiter`/`otpLimiter` in place.
+ *
+ * A signup that was started and never verified has no users row either, but it
+ * is a different situation with a different fix, so it gets its own code and
+ * the frontend sends those people to the verify screen.
+ */
+async function assertRegistered(email: string): Promise<never> {
+  const pending = await findPendingRegistration(email);
+  if (pending) {
+    throw new ForbiddenError('Verify your email to finish creating your account', 'EMAIL_NOT_VERIFIED');
+  }
+  throw new UnauthorizedError(
+    'This email is not registered. Please create an account first.',
+    'EMAIL_NOT_REGISTERED',
+  );
+}
+
 export async function login(input: LoginInput): Promise<UserRow> {
   const row = await queryOne<UserRow>(`${USER_SELECT} WHERE lower(u.email) = lower($1)`, [input.email]);
 
-  // Always run a bcrypt comparison, even when no user exists, so response time
-  // does not reveal whether an email is registered.
-  const hash = row?.password_hash ?? '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidinv';
-  const matches = await bcrypt.compare(input.password, hash);
+  if (!row || row.status === 'deleted') await assertRegistered(input.email);
+  const user = row!;
 
-  if (!row || !row.password_hash || !matches) {
-    // A signup that was started but never verified has no user row, so it
-    // would otherwise fail as "incorrect password" forever with no hint about
-    // what to do. Only say so when the supplied password actually matches the
-    // pending attempt — that discloses nothing the caller did not already
-    // know, so it is not an account-enumeration oracle.
-    const pending = await findPendingRegistration(input.email);
-    if (pending && (await bcrypt.compare(input.password, pending.password_hash))) {
-      throw new ForbiddenError(
-        'Verify your email to finish creating your account',
-        'EMAIL_NOT_VERIFIED',
-      );
-    }
-    throw new UnauthorizedError('Incorrect email or password', 'INVALID_CREDENTIALS');
+  // An account created through "Continue with Google" has no password to
+  // compare against. Saying so beats "incorrect password" for someone who has
+  // simply forgotten which button they used last time.
+  if (!user.password_hash) {
+    throw new UnauthorizedError(
+      'This account uses Google sign-in. Continue with Google, or use "Forgot password" to set a password.',
+      'USE_GOOGLE_SIGN_IN',
+    );
   }
-  if (row.status === 'suspended') throw new ForbiddenError('This account has been suspended', 'ACCOUNT_SUSPENDED');
-  if (row.status === 'deleted') throw new UnauthorizedError('Incorrect email or password', 'INVALID_CREDENTIALS');
 
-  return row;
+  const matches = await bcrypt.compare(input.password, user.password_hash);
+  if (!matches) throw new UnauthorizedError('Incorrect password. Please try again.', 'INVALID_CREDENTIALS');
+
+  if (user.status === 'suspended') throw new ForbiddenError('This account has been suspended', 'ACCOUNT_SUSPENDED');
+
+  return user;
+}
+
+/**
+ * Sign in — or sign up — with a Google ID token.
+ *
+ * Three cases, in order of preference:
+ *  1. The Google subject is already linked → that account signs in.
+ *  2. The verified Google address matches an existing account → the subject is
+ *     linked to it, so a user who signed up with a password can switch to the
+ *     Google button without ending up with two accounts.
+ *  3. Neither → an account is created. Google has already proven the address,
+ *     so it starts verified and skips the OTP entirely.
+ */
+export async function loginWithGoogle(
+  idToken: string,
+  context: { ip?: string },
+): Promise<{ user: UserRow; created: boolean }> {
+  const profile = await verifyGoogleIdToken(idToken);
+
+  const linked = await queryOne<UserRow>(`${USER_SELECT} WHERE u.google_id = $1`, [profile.googleId]);
+  const existing =
+    linked ?? (await queryOne<UserRow>(`${USER_SELECT} WHERE lower(u.email) = lower($1)`, [profile.email]));
+
+  if (existing) {
+    if (existing.status === 'suspended') {
+      throw new ForbiddenError('This account has been suspended', 'ACCOUNT_SUSPENDED');
+    }
+    if (existing.status === 'deleted') {
+      throw new UnauthorizedError('This account is no longer available', 'ACCOUNT_INACTIVE');
+    }
+
+    // Link the subject on first Google sign-in, and take the chance to fill in
+    // an avatar and the verification stamp. COALESCE so a picture the user
+    // uploaded here is never overwritten by their Google one.
+    await query(
+      `UPDATE users
+          SET google_id = $2,
+              email_verified_at = COALESCE(email_verified_at, now()),
+              avatar_url = COALESCE(avatar_url, $3)
+        WHERE id = $1`,
+      [existing.id, profile.googleId, profile.avatarUrl],
+    );
+
+    await audit({
+      actorId: existing.id,
+      actorRole: existing.role,
+      action: linked ? 'user.google_login' : 'user.google_linked',
+      entityType: 'user',
+      entityId: existing.id,
+      ip: context.ip,
+    });
+
+    const refreshed = await queryOne<UserRow>(`${USER_SELECT} WHERE u.id = $1`, [existing.id]);
+    return { user: refreshed ?? existing, created: false };
+  }
+
+  // A signup that was started here and never verified still describes what the
+  // person asked for — notably whether they wanted an organizer account — so
+  // honour it rather than silently downgrading them to a customer.
+  const pending = await findPendingRegistration(profile.email);
+  const role = pending?.role ?? 'customer';
+
+  const created = await withTransaction(async (client) => {
+    const { rows } = await client.query<UserRow>(
+      `INSERT INTO users (full_name, email, phone, google_id, role, avatar_url, email_verified_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now())
+       RETURNING id, full_name, email, phone, password_hash, role, status, avatar_url, city_id, email_verified_at, created_at`,
+      [
+        pending?.full_name || profile.fullName,
+        profile.email,
+        pending?.phone ?? null,
+        profile.googleId,
+        role,
+        profile.avatarUrl,
+      ],
+    );
+    const userRow = rows[0]!;
+
+    if (role === 'organizer') {
+      const displayName = pending?.organizer_name?.trim() || userRow.full_name;
+      const { rows: orgRows } = await client.query<{ id: string; display_name: string; slug: string; status: string }>(
+        `INSERT INTO organizers (user_id, display_name, slug, support_email, status)
+         VALUES ($1, $2, $3, $4, 'pending')
+         RETURNING id, display_name, slug, status`,
+        [userRow.id, displayName, uniqueSlug(displayName), userRow.email],
+      );
+      const org = orgRows[0]!;
+      userRow.organizer_id = org.id;
+      userRow.organizer_name = org.display_name;
+      userRow.organizer_slug = org.slug;
+      userRow.organizer_status = org.status;
+    }
+
+    if (pending) await client.query('DELETE FROM pending_registrations WHERE id = $1', [pending.id]);
+    return userRow;
+  });
+
+  sendMailAsync({
+    to: created.email,
+    template: 'welcome',
+    data: { name: created.full_name },
+    userId: created.id,
+  });
+
+  await audit({
+    actorId: created.id,
+    actorRole: created.role,
+    action: 'user.registered',
+    entityType: 'user',
+    entityId: created.id,
+    metadata: { role: created.role, provider: 'google' },
+    ip: context.ip,
+  });
+
+  return { user: created, created: true };
 }
 
 const OTP_PURPOSE_COPY: Record<OtpPurpose, string> = {
@@ -328,9 +464,19 @@ export async function requestOtp(
   // interrupted signup, so it refreshes the pending row's lifetime.
   if (purpose === 'signup') {
     const pending = await findPendingRegistration(email);
-    // Silent success both avoids confirming which addresses have a signup in
-    // flight and stops the endpoint being used to mail arbitrary strangers.
-    if (!pending) return { sent: true };
+    if (!pending) {
+      // Same reasoning as `assertRegistered`: silence here left people waiting
+      // on a resent code that was never going to be sent. The two ways to get
+      // here need opposite advice, so they are distinguished.
+      const account = await queryOne<{ id: string }>('SELECT id FROM users WHERE lower(email) = lower($1)', [email]);
+      if (account) {
+        throw new ConflictError('This email is already registered. Please sign in instead.', 'EMAIL_TAKEN');
+      }
+      throw new BadRequestError(
+        'That signup has expired or was never started. Please register again.',
+        'REGISTRATION_NOT_FOUND',
+      );
+    }
 
     await query('UPDATE pending_registrations SET expires_at = $2 WHERE id = $1', [
       pending.id,
@@ -358,9 +504,11 @@ export async function requestOtp(
     [email],
   );
 
-  // For login/reset the account must exist; we return success regardless to
-  // avoid turning this endpoint into an account-enumeration oracle.
-  if (!row) return { sent: true };
+  // Login and reset both require an account. Telling the caller when there
+  // isn't one is an enumeration trade made on purpose — see `assertRegistered`
+  // — but it is the only way someone who mistyped their address finds out,
+  // instead of staring at an inbox waiting for a code that was never sent.
+  if (!row) await assertRegistered(email);
 
   // Nothing to confirm on an address that is already verified — skip the send
   // rather than mailing a code that would do nothing.

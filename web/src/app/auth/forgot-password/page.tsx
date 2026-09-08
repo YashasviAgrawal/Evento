@@ -33,22 +33,33 @@ function ForgotPasswordForm() {
   const [devOtp, setDevOtp] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unregistered, setUnregistered] = useState(false);
 
   async function requestCode(event: React.FormEvent) {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setUnregistered(false);
     try {
       const { data } = await api.post<{ sent: boolean; devOtp?: string }>('/auth/otp/request', {
         email: email.trim(),
         purpose: 'reset_password',
       });
-      // The API never reveals whether an address is registered, so the copy
-      // below is deliberately conditional ("if that email is registered").
       if (data.devOtp) setDevOtp(data.devOtp);
       setStage('reset');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not send the reset code');
+      if (err instanceof ApiError) {
+        // An unverified signup has no account to reset — the code they need is
+        // the signup one, on a different screen.
+        if (err.code === 'EMAIL_NOT_VERIFIED') {
+          router.push(`/auth/verify-email?email=${encodeURIComponent(email.trim())}`);
+          return;
+        }
+        setUnregistered(err.code === 'EMAIL_NOT_REGISTERED');
+        setError(err.message);
+      } else {
+        setError('Could not send the reset code');
+      }
     } finally {
       setLoading(false);
     }
@@ -123,7 +134,7 @@ function ForgotPasswordForm() {
               {stage === 'request' && 'We’ll email you a 6-digit code to set a new password.'}
               {stage === 'reset' && (
                 <>
-                  If <span className="font-medium text-ink-700">{email}</span> is registered, a code is on its way.
+                  We sent a 6-digit code to <span className="font-medium text-ink-700">{email}</span>.
                 </>
               )}
               {stage === 'done' && 'Signing you in with your new password…'}
@@ -133,6 +144,14 @@ function ForgotPasswordForm() {
           {error && (
             <Alert tone="error" className="mb-4" onDismiss={() => setError(null)}>
               {error}
+              {unregistered && (
+                <Link
+                  href={`/auth/register?email=${encodeURIComponent(email.trim())}`}
+                  className="mt-2 block font-semibold underline underline-offset-2"
+                >
+                  Create an account with {email.trim()}
+                </Link>
+              )}
             </Alert>
           )}
 

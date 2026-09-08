@@ -9,6 +9,7 @@ import { useAuth } from '@/components/providers/auth-provider';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Alert, Field, Input, Spinner } from '@/components/ui/index';
+import { GoogleButton } from '@/components/auth/google-button';
 import { cn } from '@/lib/format';
 
 type Mode = 'password' | 'otp';
@@ -21,10 +22,20 @@ export default function LoginPage() {
   );
 }
 
+/**
+ * `unregistered` earns its own flag rather than being just another message:
+ * the fix is a link to the signup form, and telling someone their email is not
+ * registered without offering that link is the unhelpful half of the answer.
+ */
+interface LoginError {
+  message: string;
+  unregistered?: boolean;
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signIn, signInWithOtp } = useAuth();
+  const { signIn, signInWithOtp, signInWithGoogle } = useAuth();
   const toast = useToast();
 
   const next = searchParams.get('next') ?? '';
@@ -35,7 +46,7 @@ function LoginForm() {
   const [otpSent, setOtpSent] = useState(false);
   const [devOtp, setDevOtp] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoginError | null>(null);
 
   /** Role decides where you land when no explicit `next` was supplied. */
   function destinationFor(role: string): string {
@@ -43,6 +54,27 @@ function LoginForm() {
     if (role === 'admin') return '/admin';
     if (role === 'organizer') return '/organizer';
     return '/account/bookings';
+  }
+
+  /**
+   * Shared failure handling for all three sign-in routes: password, OTP and
+   * Google. Some failures are answered by navigating rather than by a message,
+   * so they must be handled identically wherever they surface.
+   */
+  function handleAuthError(err: unknown, fallback: string): void {
+    if (err instanceof ApiError) {
+      // The signup was started but never verified, so no account exists yet.
+      // Send them to finish it rather than leaving them retyping a password
+      // that is not the problem.
+      if (err.code === 'EMAIL_NOT_VERIFIED') {
+        const params = new URLSearchParams({ email: email.trim(), ...(next ? { next } : {}) });
+        router.push(`/auth/verify-email?${params.toString()}`);
+        return;
+      }
+      setError({ message: err.message, unregistered: err.code === 'EMAIL_NOT_REGISTERED' });
+      return;
+    }
+    setError({ message: fallback });
   }
 
   async function handlePasswordLogin(event: React.FormEvent) {
@@ -55,15 +87,7 @@ function LoginForm() {
       router.push(destinationFor(user.role));
       router.refresh();
     } catch (err) {
-      // The password was right but the signup was never verified, so no
-      // account exists yet. Send them to finish it rather than leaving them
-      // retyping a password that is not the problem.
-      if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
-        const params = new URLSearchParams({ email: email.trim(), ...(next ? { next } : {}) });
-        router.push(`/auth/verify-email?${params.toString()}`);
-        return;
-      }
-      setError(err instanceof ApiError ? err.message : 'Could not sign you in');
+      handleAuthError(err, 'Could not sign you in');
     } finally {
       setLoading(false);
     }
@@ -84,7 +108,7 @@ function LoginForm() {
       if (data.devOtp) setDevOtp(data.devOtp);
       toast.toast({ tone: 'info', title: 'Code sent', description: `Check ${email} for a 6-digit code.` });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not send the code');
+      handleAuthError(err, 'Could not send the code');
     } finally {
       setLoading(false);
     }
@@ -100,9 +124,27 @@ function LoginForm() {
       router.push(destinationFor(user.role));
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not verify the code');
+      handleAuthError(err, 'Could not verify the code');
     } finally {
       setLoading(false);
+    }
+  }
+
+  /**
+   * Google signs in and signs up through the same call, so a first-time user
+   * lands straight in the product — no password, no code, no signup form.
+   */
+  async function handleGoogle(credential: string) {
+    setError(null);
+    try {
+      const { user, created } = await signInWithGoogle(credential);
+      toast.success(
+        created ? `Welcome to Tixit, ${user.fullName.split(' ')[0]}` : `Welcome back, ${user.fullName.split(' ')[0]}`,
+      );
+      router.push(destinationFor(user.role));
+      router.refresh();
+    } catch (err) {
+      handleAuthError(err, 'Could not sign you in with Google');
     }
   }
 
@@ -122,6 +164,13 @@ function LoginForm() {
             <h1 className="text-xl font-bold tracking-tight text-ink-900">Welcome back</h1>
             <p className="mt-1 text-sm text-ink-500">Sign in to book tickets and manage your events</p>
           </div>
+
+          <GoogleButton
+            onCredential={handleGoogle}
+            text="continue_with"
+            dividerLabel="or sign in with email"
+            disabled={loading}
+          />
 
           <div className="mb-6 grid grid-cols-2 gap-1 rounded-lg bg-ink-100 p-1">
             {(
@@ -150,7 +199,18 @@ function LoginForm() {
 
           {error && (
             <Alert tone="error" className="mb-4" onDismiss={() => setError(null)}>
-              {error}
+              {error.message}
+              {error.unregistered && (
+                <Link
+                  href={`/auth/register?${new URLSearchParams({
+                    email: email.trim(),
+                    ...(next ? { next } : {}),
+                  }).toString()}`}
+                  className="mt-2 block font-semibold underline underline-offset-2"
+                >
+                  Create an account with {email.trim()}
+                </Link>
+              )}
             </Alert>
           )}
 

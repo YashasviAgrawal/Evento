@@ -48,9 +48,30 @@ export const login = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * One endpoint for both signing in and signing up with Google — the caller
+ * cannot know which it is, and does not need to. 201 when an account was
+ * created, 200 when an existing one signed in.
+ */
+export const googleAuth = asyncHandler(async (req, res) => {
+  const { user, created } = await authService.loginWithGoogle(req.body.credential, { ip: clientIp(req) });
+  const tokens = await authService.createSession(user, requestContext(req));
+  setRefreshCookie(res, tokens.refreshToken, tokens.expiresAt);
+  return ok(
+    res,
+    {
+      user: authService.toPublicUser(user),
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      created,
+    },
+    created ? 201 : 200,
+  );
+});
+
 export const requestOtp = asyncHandler(async (req, res) => {
   const result = await authService.requestOtp(req.body.email, req.body.purpose);
-  return ok(res, { ...result, message: 'If that email is registered, a code is on its way.' });
+  return ok(res, { ...result, message: 'A code is on its way to your inbox.' });
 });
 
 export const verifyOtp = asyncHandler(async (req, res) => {

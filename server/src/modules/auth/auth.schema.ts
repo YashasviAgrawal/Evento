@@ -37,6 +37,15 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Enter your password'),
 });
 
+/**
+ * The `credential` is the ID token Google Identity Services hands the browser.
+ * Only its shape is checked here — the signature and audience are verified
+ * against Google in `google.service.ts`.
+ */
+export const googleAuthSchema = z.object({
+  credential: z.string().min(20, 'Missing Google credential').max(4096),
+});
+
 export const requestOtpSchema = z.object({
   email: emailSchema,
   purpose: z.enum(['login', 'signup', 'reset_password', 'verify_email']).default('login'),
@@ -69,6 +78,7 @@ export const changePasswordSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
+export type GoogleAuthInput = z.infer<typeof googleAuthSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
