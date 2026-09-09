@@ -388,6 +388,58 @@ export interface CheckInResult {
   };
 }
 
+/* ─────────────────────────────── blog ─────────────────────────────── */
+
+export interface BlogCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  postCount: number;
+}
+
+export interface BlogPostCard {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  coverImageUrl: string | null;
+  coverImageAlt: string | null;
+  authorName: string;
+  tags: string[];
+  isFeatured: boolean;
+  /** Derived from the word count by the database, never supplied by an author. */
+  readingMinutes: number;
+  publishedAt: string | null;
+  updatedAt: string;
+  category: { id: string; name: string; slug: string } | null;
+}
+
+export interface BlogFaqItem {
+  question: string;
+  answer: string;
+}
+
+export interface BlogPostDetail extends BlogPostCard {
+  /** Markdown. Rendered server-side — see `components/blog/article-body`. */
+  content: string;
+  status: 'draft' | 'published' | 'archived';
+  metaTitle: string | null;
+  metaDescription: string | null;
+  canonicalUrl: string | null;
+  ogImageUrl: string | null;
+  focusKeyword: string | null;
+  faq: BlogFaqItem[];
+  viewCount: number;
+  createdAt: string;
+  related: BlogPostCard[];
+}
+
+/** What the admin editor reads and writes; adds the fields drafts need. */
+export interface AdminBlogPost extends BlogPostDetail {
+  categoryId: string | null;
+}
+
 export interface PlatformSettings {
   commission_percent: number;
   tax_percent: number;
