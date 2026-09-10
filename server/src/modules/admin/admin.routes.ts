@@ -349,6 +349,92 @@ router.get(
   }),
 );
 
+/**
+ * Organizer analytics leaderboard — how every organizer on the platform is
+ * performing, in one sortable table.
+ */
+router.get(
+  '/organizers/analytics',
+  validate({
+    query: pageQuery.extend({
+      status: z.enum(['pending', 'verified', 'rejected', 'suspended']).optional(),
+      sort: z.enum(['revenue', 'commission', 'tickets', 'events', 'attendance', 'newest', 'name']).default('revenue'),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const params = req.query as unknown as {
+      status?: string;
+      q?: string;
+      sort: reportService.OrganizerSort;
+      page: number;
+      limit: number;
+    };
+    const { organizers, totals, total } = await reportService.getOrganizerAnalytics(params);
+    return ok(res, { organizers, totals, meta: buildPageMeta(params.page, params.limit, total) });
+  }),
+);
+
+/** The full report for a single organizer: profile, sales, events, support load. */
+router.get(
+  '/organizers/:id/analytics',
+  validate({
+    params: z.object({ id: z.string().uuid() }),
+    query: z.object({ days: z.coerce.number().int().min(7).max(365).default(30) }),
+  }),
+  asyncHandler(async (req, res) => {
+    const days = Number((req.query as unknown as { days: number }).days);
+    const report = await reportService.getOrganizerAdminReport(req.params.id, days);
+    if (!report) throw new NotFoundError('Organizer');
+    return ok(res, report);
+  }),
+);
+
+/** Every booking taken by one organizer, as CSV. */
+router.get(
+  '/organizers/:id/bookings/export',
+  validate({ params: z.object({ id: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const organizer = await queryOne<{ slug: string }>('SELECT slug FROM organizers WHERE id = $1', [req.params.id]);
+    if (!organizer) throw new NotFoundError('Organizer');
+
+    const { rows } = await query(
+      `SELECT b.booking_code, b.status, b.quantity, b.subtotal_paise, b.discount_paise, b.tax_paise,
+              b.convenience_fee_paise, b.total_paise, b.commission_paise, b.organizer_payout_paise,
+              b.refunded_paise, b.coupon_code, b.customer_name, b.customer_email, b.customer_phone,
+              b.created_at, b.confirmed_at, e.title AS event_title, e.starts_at
+         FROM bookings b JOIN events e ON e.id = b.event_id
+        WHERE b.organizer_id = $1
+        ORDER BY b.created_at DESC
+        LIMIT 20000`,
+      [req.params.id],
+    );
+
+    const csv = toCsv(rows, [
+      { header: 'Booking ID', value: (r) => r.booking_code },
+      { header: 'Event', value: (r) => r.event_title },
+      { header: 'Event Date', value: (r) => r.starts_at },
+      { header: 'Customer', value: (r) => r.customer_name },
+      { header: 'Email', value: (r) => r.customer_email },
+      { header: 'Phone', value: (r) => r.customer_phone },
+      { header: 'Status', value: (r) => r.status },
+      { header: 'Qty', value: (r) => r.quantity },
+      { header: 'Subtotal', value: (r) => paiseToRupees(Number(r.subtotal_paise)).toFixed(2) },
+      { header: 'Discount', value: (r) => paiseToRupees(Number(r.discount_paise)).toFixed(2) },
+      { header: 'Tax', value: (r) => paiseToRupees(Number(r.tax_paise)).toFixed(2) },
+      { header: 'Convenience Fee', value: (r) => paiseToRupees(Number(r.convenience_fee_paise)).toFixed(2) },
+      { header: 'Total', value: (r) => paiseToRupees(Number(r.total_paise)).toFixed(2) },
+      { header: 'Commission', value: (r) => paiseToRupees(Number(r.commission_paise)).toFixed(2) },
+      { header: 'Organizer Payout', value: (r) => paiseToRupees(Number(r.organizer_payout_paise)).toFixed(2) },
+      { header: 'Refunded', value: (r) => paiseToRupees(Number(r.refunded_paise)).toFixed(2) },
+      { header: 'Coupon', value: (r) => r.coupon_code ?? '' },
+      { header: 'Created At', value: (r) => r.created_at },
+      { header: 'Confirmed At', value: (r) => r.confirmed_at ?? '' },
+    ]);
+
+    return sendCsv(res, csvFilename(`tixit-${organizer.slug}-bookings`), csv);
+  }),
+);
+
 router.post(
   '/organizers/:id/verify',
   validate({ params: z.object({ id: z.string().uuid() }) }),
