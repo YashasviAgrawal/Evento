@@ -25,6 +25,10 @@ const NAV_LINKS = [
   { href: '/events?when=today', label: 'Today' },
   { href: '/events?when=weekend', label: 'This Weekend' },
   { href: '/events?price=free', label: 'Free' },
+  // Not a filter like the others, but it earns the slot: a link from every
+  // page is how the articles get crawled and how their authority reaches the
+  // listings they link back to.
+  { href: '/blog', label: 'Blog' },
 ];
 
 export function Navbar() {

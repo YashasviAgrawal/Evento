@@ -374,6 +374,116 @@ export interface EventPerformance {
   sellThrough: number;
 }
 
+/* ────────────────── admin ▸ organizer analytics ────────────────── */
+
+export interface CategoryRevenue {
+  name: string;
+  slug: string;
+  color: string;
+  events: number;
+  tickets: number;
+  revenuePaise: number;
+}
+
+/** One row of the admin's organizer leaderboard. */
+export interface OrganizerAnalyticsRow {
+  id: string;
+  displayName: string;
+  slug: string;
+  status: string;
+  logoUrl: string | null;
+  commissionPercent: number | null;
+  joinedAt: string;
+  verifiedAt: string | null;
+  contact: { fullName: string; email: string; phone: string | null };
+  totalEvents: number;
+  publishedEvents: number;
+  pendingEvents: number;
+  upcomingEvents: number;
+  nextEventAt: string | null;
+  lastEventAt: string | null;
+  totalBookings: number;
+  ticketsSold: number;
+  grossRevenuePaise: number;
+  commissionPaise: number;
+  payoutPaise: number;
+  refundedPaise: number;
+  ticketsIssued: number;
+  ticketsCheckedIn: number;
+  attendanceRate: number;
+  lastBookingAt: string | null;
+}
+
+export interface OrganizerAnalyticsTotals {
+  organizers: number;
+  verified: number;
+  pending: number;
+  suspended: number;
+  /** Organizers that have taken at least one paid booking. */
+  selling: number;
+  grossRevenuePaise: number;
+  commissionPaise: number;
+  payoutPaise: number;
+  refundedPaise: number;
+  ticketsSold: number;
+}
+
+export interface OrganizerAnalyticsResponse {
+  organizers: OrganizerAnalyticsRow[];
+  totals: OrganizerAnalyticsTotals;
+  meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean };
+}
+
+/** The complete per-organizer report behind /admin/organizers/[id]. */
+export interface AdminOrganizerReport {
+  organizer: {
+    id: string;
+    displayName: string;
+    slug: string;
+    bio: string | null;
+    logoUrl: string | null;
+    website: string | null;
+    supportEmail: string | null;
+    supportPhone: string | null;
+    gstin: string | null;
+    pan: string | null;
+    address: string | null;
+    status: string;
+    commissionPercent: number | null;
+    createdAt: string;
+    verifiedAt: string | null;
+    rejectionReason: string | null;
+    city: string | null;
+    user: {
+      id: string;
+      fullName: string;
+      email: string;
+      phone: string | null;
+      status: string;
+      lastLoginAt: string | null;
+    };
+  };
+  summary: OrganizerSummary;
+  salesSeries: SalesPoint[];
+  events: EventPerformance[];
+  categories: CategoryRevenue[];
+  recentBookings: Array<{
+    id: string;
+    bookingCode: string;
+    status: string;
+    quantity: number;
+    totalPaise: number;
+    payoutPaise: number;
+    customerName: string;
+    customerEmail: string;
+    createdAt: string;
+    confirmedAt: string | null;
+    eventTitle: string;
+  }>;
+  refunds: { total: number; pending: number; processed: number; rejected: number; amountPaise: number };
+  coupons: { total: number; pending: number; approved: number; redemptions: number; discountPaise: number };
+}
+
 export interface CheckInResult {
   status: 'admitted' | 'already_used' | 'invalid' | 'wrong_event' | 'cancelled';
   message: string;
@@ -386,6 +496,58 @@ export interface CheckInResult {
     checkedInAt: string | null;
     eventTitle: string;
   };
+}
+
+/* ─────────────────────────────── blog ─────────────────────────────── */
+
+export interface BlogCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  postCount: number;
+}
+
+export interface BlogPostCard {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  coverImageUrl: string | null;
+  coverImageAlt: string | null;
+  authorName: string;
+  tags: string[];
+  isFeatured: boolean;
+  /** Derived from the word count by the database, never supplied by an author. */
+  readingMinutes: number;
+  publishedAt: string | null;
+  updatedAt: string;
+  category: { id: string; name: string; slug: string } | null;
+}
+
+export interface BlogFaqItem {
+  question: string;
+  answer: string;
+}
+
+export interface BlogPostDetail extends BlogPostCard {
+  /** Markdown. Rendered server-side — see `components/blog/article-body`. */
+  content: string;
+  status: 'draft' | 'published' | 'archived';
+  metaTitle: string | null;
+  metaDescription: string | null;
+  canonicalUrl: string | null;
+  ogImageUrl: string | null;
+  focusKeyword: string | null;
+  faq: BlogFaqItem[];
+  viewCount: number;
+  createdAt: string;
+  related: BlogPostCard[];
+}
+
+/** What the admin editor reads and writes; adds the fields drafts need. */
+export interface AdminBlogPost extends BlogPostDetail {
+  categoryId: string | null;
 }
 
 export interface PlatformSettings {

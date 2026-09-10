@@ -106,6 +106,7 @@ export const STATUS_STYLES: Record<string, string> = {
   valid: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   used: 'bg-sky-50 text-sky-700 ring-sky-200',
   active: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  archived: 'bg-ink-100 text-ink-600 ring-ink-200',
 };
 
 export function statusLabel(status: string): string {

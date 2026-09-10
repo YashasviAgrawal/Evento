@@ -19,6 +19,7 @@ import ticketRoutes from './modules/tickets/ticket.routes';
 import organizerRoutes from './modules/organizer/organizer.routes';
 import organizerCouponRoutes from './modules/coupons/organizer-coupon.routes';
 import adminRoutes from './modules/admin/admin.routes';
+import { adminBlogRoutes, publicBlogRoutes } from './modules/blog/blog.routes';
 import uploadRoutes, { uploadDir } from './modules/uploads/upload.routes';
 
 export function createApp(): Express {
@@ -134,6 +135,10 @@ export function createApp(): Express {
   api.use('/organizer/events', organizerEventRoutes);
   api.use('/organizer/coupons', organizerCouponRoutes);
   api.use('/organizer', organizerRoutes);
+  api.use('/blog', publicBlogRoutes);
+  // Must precede the '/admin' mount, which would otherwise match first and
+  // 404 on an unknown /blog path inside its own router.
+  api.use('/admin/blog', adminBlogRoutes);
   api.use('/admin', adminRoutes);
   api.use('/uploads', uploadRoutes);
 

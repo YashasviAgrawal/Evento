@@ -1,12 +1,13 @@
 import type { MetadataRoute } from 'next';
 import { fetchPublic, fetchPublicPaged } from '@/lib/api';
-import type { Category, City, EventCard } from '@/lib/types';
+import type { BlogCategory, BlogPostCard, Category, City, EventCard } from '@/lib/types';
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3002').replace(/\/$/, '');
 
 const STATIC_ROUTES: Array<{ path: string; changeFrequency: MetadataRoute.Sitemap[number]['changeFrequency']; priority: number }> = [
   { path: '', changeFrequency: 'daily', priority: 1 },
   { path: '/events', changeFrequency: 'hourly', priority: 0.9 },
+  { path: '/blog', changeFrequency: 'weekly', priority: 0.8 },
   { path: '/about', changeFrequency: 'monthly', priority: 0.6 },
   { path: '/support', changeFrequency: 'monthly', priority: 0.6 },
   { path: '/list-your-show', changeFrequency: 'monthly', priority: 0.7 },
@@ -33,12 +34,14 @@ async function listAllPublishedEvents(): Promise<EventCard[]> {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [events, categories, cities] = await Promise.all([
+  const [events, categories, cities, posts, blogCategories] = await Promise.all([
     listAllPublishedEvents(),
     fetchPublic<Category[]>('/catalog/categories', undefined, 3600),
     // The catalogue covers every city in India; only the ones that actually
     // have something on are worth spending crawl budget on.
     fetchPublic<City[]>('/catalog/cities', { hasEvents: 'true', counts: 'false' }, 3600),
+    fetchPublic<BlogPostCard[]>('/blog/feed', undefined, 3600),
+    fetchPublic<BlogCategory[]>('/blog/categories', undefined, 3600),
   ]);
 
   const now = new Date();
@@ -70,5 +73,31 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.5,
   }));
 
-  return [...staticEntries, ...eventEntries, ...categoryEntries, ...cityEntries];
+  // Articles carry a real lastModified, because unlike an event listing they
+  // are genuinely revised — and that is the signal that gets an updated post
+  // recrawled rather than left at its old version.
+  const postEntries: MetadataRoute.Sitemap = (posts ?? []).map((post) => ({
+    url: `${SITE_URL}/blog/${post.slug}`,
+    lastModified: new Date(post.updatedAt),
+    changeFrequency: 'monthly',
+    priority: post.isFeatured ? 0.8 : 0.7,
+  }));
+
+  const blogCategoryEntries: MetadataRoute.Sitemap = (blogCategories ?? [])
+    .filter((category) => category.postCount > 0)
+    .map((category) => ({
+      url: `${SITE_URL}/blog/category/${category.slug}`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.5,
+    }));
+
+  return [
+    ...staticEntries,
+    ...eventEntries,
+    ...categoryEntries,
+    ...cityEntries,
+    ...postEntries,
+    ...blogCategoryEntries,
+  ];
 }
