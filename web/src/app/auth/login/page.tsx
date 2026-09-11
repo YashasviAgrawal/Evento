@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, KeyRound, Mail, Ticket } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { safeNext } from '@/lib/auth-redirect';
+import type { Role } from '@/lib/types';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
@@ -48,9 +50,13 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<LoginError | null>(null);
 
-  /** Role decides where you land when no explicit `next` was supplied. */
-  function destinationFor(role: string): string {
-    if (next) return next;
+  /**
+   * Role decides where you land when there is no `next` this role may use —
+   * a `next` left over from whoever was signed in before does not count.
+   */
+  function destinationFor(role: Role): string {
+    const wanted = safeNext(next, role);
+    if (wanted) return wanted;
     if (role === 'admin') return '/admin';
     if (role === 'organizer') return '/organizer';
     return '/account/bookings';

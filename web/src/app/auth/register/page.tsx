@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Building2, Ticket, User } from 'lucide-react';
 import { ApiError } from '@/lib/api';
+import { safeNext } from '@/lib/auth-redirect';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
@@ -104,7 +105,7 @@ function RegisterForm() {
     try {
       const { user, created } = await signInWithGoogle(credential);
       toast.success(created ? `Welcome to Tixit, ${user.fullName.split(' ')[0]}` : 'Welcome back');
-      router.push(next || (user.role === 'organizer' ? '/organizer' : '/events'));
+      router.push(safeNext(next, user.role) ?? (user.role === 'organizer' ? '/organizer' : '/events'));
       router.refresh();
     } catch (err) {
       setApiError(err instanceof ApiError ? err.message : 'Could not sign you up with Google');

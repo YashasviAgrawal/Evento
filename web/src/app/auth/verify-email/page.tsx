@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, MailCheck, ShieldCheck } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { safeNext } from '@/lib/auth-redirect';
 import { useAuth, type VerifyPurpose } from '@/components/providers/auth-provider';
 import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
@@ -68,7 +69,8 @@ function VerifyEmailForm() {
   }, [cooldown]);
 
   function destination(role = user?.role): string {
-    if (next) return next;
+    const wanted = safeNext(next, role);
+    if (wanted) return wanted;
     if (role === 'admin') return '/admin';
     // A brand-new organizer goes straight to KYC: nothing can be paid out until
     // those details are verified, so it is the first thing worth doing. An
