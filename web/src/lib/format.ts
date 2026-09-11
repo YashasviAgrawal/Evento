@@ -107,6 +107,11 @@ export const STATUS_STYLES: Record<string, string> = {
   used: 'bg-sky-50 text-sky-700 ring-sky-200',
   active: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   archived: 'bg-ink-100 text-ink-600 ring-ink-200',
+  // Payouts and KYC
+  paid: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  processing: 'bg-sky-50 text-sky-700 ring-sky-200',
+  failed: 'bg-rose-50 text-rose-700 ring-rose-200',
+  not_submitted: 'bg-ink-100 text-ink-600 ring-ink-200',
 };
 
 export function statusLabel(status: string): string {

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BadgeCheck, Ban, BarChart3, Percent, Search, ShieldCheck } from 'lucide-react';
+import { BadgeCheck, Ban, BarChart3, Percent, Search, ShieldCheck, Wallet } from 'lucide-react';
 import { api, ApiError, type PageMeta } from '@/lib/api';
 import { PageHeader } from '@/components/dashboard/shell';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -208,6 +208,11 @@ function OrganizersTable() {
                   <ButtonLink href={`/admin/organizers/${organizer.id}`} variant="outline" size="sm">
                     <BarChart3 className="h-3.5 w-3.5" />
                     Report
+                  </ButtonLink>
+
+                  <ButtonLink href={`/admin/payments/${organizer.id}`} variant="outline" size="sm">
+                    <Wallet className="h-3.5 w-3.5" />
+                    Payments
                   </ButtonLink>
 
                   {organizer.status !== 'verified' && (

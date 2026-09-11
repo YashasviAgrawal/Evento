@@ -254,6 +254,8 @@ An invalid signature returns `402 SIGNATURE_MISMATCH` and marks the payment fail
 | Method | Path | Description |
 | --- | --- | --- |
 | GET | `/profile` · PATCH `/profile` | Public profile and business details. |
+| GET | `/kyc` | Payout KYC: the submitted record and its review state. |
+| POST | `/kyc` | Submit — or resubmit after rejection — identity, business and bank details. |
 | GET | `/dashboard` | Summary, 30-day sales series, event performance. |
 | GET | `/reports?days=30` | Same, over a chosen window. |
 | GET | `/bookings` | Attendees, filterable by event, status and free text. |
@@ -285,6 +287,22 @@ by the code itself plus the organizer session, which must own the event.
 
 `status` is one of `admitted` · `already_used` · `invalid` · `wrong_event` · `cancelled`.
 
+```http
+POST /organizer/kyc
+{ "legalName": "Rahul Sharma", "pan": "AAAAA0000A",
+  "businessName": "Sharma Events Pvt Ltd", "gstin": "22AAAAA0000A1Z5",
+  "businessAddress": "Unit 4, Nehru Place, New Delhi 110019",
+  "accountHolderName": "Sharma Events Pvt Ltd", "accountNumber": "123456789012",
+  "ifsc": "HDFC0001234", "bankName": "HDFC Bank" }
+```
+
+`gstin` and `bankName` are optional; everything else is required. PAN, GSTIN, IFSC and account
+number formats are enforced in the API *and* by database constraints. Submitting puts the record
+into `pending`; an approved record is locked and can only be reopened by an admin.
+
+`GET /organizer/kyc` answers with `{ status, payoutsEnabled, kyc }`, where `status` is
+`not_submitted` · `pending` · `approved` · `rejected`.
+
 ---
 
 ## Admin console — `/admin` (admin)
@@ -302,6 +320,12 @@ by the code itself plus the organizer session, which must own the event.
 | POST | `/organizers/:id/verify` | Verify and notify. |
 | POST | `/organizers/:id/status` | Set pending / verified / rejected / suspended. |
 | POST | `/organizers/:id/commission` | Per-organizer override; `null` restores the default. |
+| GET | `/payouts` | Payout ledger index: earnings, paid and outstanding per organizer. |
+| GET | `/organizers/:id/payments` | One organizer's KYC, balance, payout ledger and per-event earnings. |
+| POST | `/organizers/:id/payouts` | Record a manual transfer. Requires approved KYC. |
+| PATCH · DELETE | `/payouts/:payoutId` | Correct or remove a recorded payout. |
+| GET | `/organizers/:id/payouts/export` | **CSV** of the payout ledger. |
+| POST | `/organizers/:id/kyc/review` | Approve, reject (with a reason) or reopen a KYC submission. |
 | GET | `/users` | Directory filterable by role and status. |
 | POST | `/users/:id/status` | Activate / suspend. Suspension revokes sessions immediately. |
 | GET · POST · PATCH · DELETE | `/coupons` | Full coupon management. |
@@ -320,6 +344,33 @@ POST /admin/coupons
 
 For coupons, `value` is a percentage when `type` is `percent`, and **rupees** when `type` is
 `flat`; `maxDiscount` and `minOrder` are always rupees.
+
+### Payouts
+
+```http
+POST /admin/organizers/:id/payouts
+{ "amount": 18500, "tds": 1850, "fee": 5, "method": "bank_transfer",
+  "status": "paid", "utr": "N123456789012345",
+  "periodStart": "2026-08-01", "periodEnd": "2026-08-31",
+  "notes": "August settlement" }
+```
+
+`amount`, `tds` and `fee` are **rupees**; every amount in a response is paise. The organizer
+receives `amount − tds − fee`. `method` is `bank_transfer` · `upi` · `cheque` · `cash` · `other`
+and `status` is `pending` · `processing` · `paid` · `failed` · `cancelled`.
+
+An organizer's balance is a running total, not a per-booking settlement:
+
+```
+earned  = Σ organizer_payout_paise − Σ refunded_paise   (confirmed bookings)
+settled = Σ payouts that are pending, processing or paid
+pending = earned − settled
+```
+
+`pending` may be negative — an advance, or a refund issued after a settlement, genuinely leaves
+the organizer owing the platform. Recording a payout requires **approved** KYC, and the
+destination account is snapshotted onto the payout so a later change of bank details never
+rewrites where past money went.
 
 ---
 

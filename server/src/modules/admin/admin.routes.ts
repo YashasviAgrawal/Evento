@@ -12,12 +12,21 @@ import { sendMailAsync } from '../../services/mail.service';
 import { getSettings, updateSettings } from '../../services/settings.service';
 import { env } from '../../config/env';
 import * as reportService from '../reports/report.service';
+import * as payoutService from '../payouts/payout.service';
+import * as kycService from '../payouts/kyc.service';
 import { processRefund } from '../payments/payment.service';
 import { cancelEvent } from '../events/event.service';
 import { invalidateCache } from '../../utils/cache';
 
 const router = Router();
 router.use(authenticate, requireAdmin);
+
+/** "1–31 Aug 2025", or empty when a payout covers no particular window. */
+function periodLabel(start: string | null, end: string | null): string {
+  if (!start && !end) return '';
+  if (start && end) return `${start} to ${end}`;
+  return start ?? end ?? '';
+}
 
 const pageQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -942,6 +951,267 @@ router.post(
       entityId: req.params.id,
     });
     return ok(res, { status: 'rejected' });
+  }),
+);
+
+/* ─────────────────────── organizer payments ─────────────────────── */
+
+/**
+ * The payouts index: every organizer with what they have earned, what has been
+ * sent and what is still owed, so finance can work down the list by balance.
+ */
+router.get(
+  '/payouts',
+  validate({
+    query: pageQuery.extend({
+      kycStatus: z.enum(['not_submitted', 'pending', 'approved', 'rejected']).optional(),
+      // Not z.coerce.boolean(), which reads the string "false" as true.
+      owing: z
+        .enum(['true', 'false'])
+        .optional()
+        .transform((value) => value === 'true'),
+      sort: z.enum(['pending', 'revenue', 'paid', 'name']).default('pending'),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const params = req.query as unknown as {
+      q?: string;
+      kycStatus?: string;
+      owing?: boolean;
+      sort: string;
+      page: number;
+      limit: number;
+    };
+    const { organizers, totals, total } = await payoutService.getOrganizerLedger(params);
+    return ok(res, { organizers, totals, meta: buildPageMeta(params.page, params.limit, total) });
+  }),
+);
+
+/**
+ * Everything about one organizer's money on a single screen: their KYC and
+ * bank details, the balance, the payout ledger and per-event earnings.
+ */
+router.get(
+  '/organizers/:id/payments',
+  validate({
+    params: z.object({ id: z.string().uuid() }),
+    query: z.object({
+      status: z.enum(payoutService.PAYOUT_STATUSES).optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const params = req.query as unknown as { status?: string; page: number; limit: number };
+    const organizer = await queryOne(
+      `SELECT o.id, o.display_name, o.slug, o.status, o.logo_url, o.commission_percent, o.created_at,
+              u.full_name, u.email, u.phone
+         FROM organizers o JOIN users u ON u.id = o.user_id
+        WHERE o.id = $1`,
+      [req.params.id],
+    );
+    if (!organizer) throw new NotFoundError('Organizer');
+
+    const [kyc, summary, ledger, events] = await Promise.all([
+      kycService.getKycState(req.params.id),
+      payoutService.getPayoutSummary(req.params.id),
+      payoutService.listPayouts(req.params.id, params),
+      payoutService.getEventEarnings(req.params.id),
+    ]);
+
+    return ok(res, {
+      organizer: {
+        id: organizer.id,
+        displayName: organizer.display_name,
+        slug: organizer.slug,
+        status: organizer.status,
+        logoUrl: organizer.logo_url,
+        commissionPercent: organizer.commission_percent === null ? null : Number(organizer.commission_percent),
+        createdAt: organizer.created_at,
+        user: { fullName: organizer.full_name, email: organizer.email, phone: organizer.phone },
+      },
+      kyc,
+      summary,
+      payouts: ledger.payouts,
+      events,
+      meta: buildPageMeta(params.page, params.limit, ledger.total),
+    });
+  }),
+);
+
+/** Record a transfer the finance team has made. */
+router.post(
+  '/organizers/:id/payouts',
+  validate({
+    params: z.object({ id: z.string().uuid() }),
+    body: payoutService.PAYOUT_INPUT,
+  }),
+  asyncHandler(async (req, res) => {
+    const admin = currentUser(req);
+    const payout = await payoutService.createPayout(req.params.id, req.body, admin.id);
+
+    if (payout.status === 'paid') {
+      const contact = await queryOne<{ email: string; full_name: string; display_name: string }>(
+        `SELECT u.email, u.full_name, o.display_name
+           FROM organizers o JOIN users u ON u.id = o.user_id
+          WHERE o.id = $1`,
+        [req.params.id],
+      );
+      if (contact) {
+        sendMailAsync({
+          to: contact.email,
+          template: 'payout_sent',
+          data: {
+            name: contact.full_name,
+            organizerName: contact.display_name,
+            reference: payout.reference,
+            amountPaise: payout.netPaise,
+            method: payout.method.replace(/_/g, ' '),
+            utr: payout.utr,
+            periodLabel: periodLabel(payout.periodStart, payout.periodEnd),
+          },
+        });
+      }
+    }
+
+    await audit({
+      actorId: admin.id,
+      actorRole: 'admin',
+      action: 'organizer.payout.recorded',
+      entityType: 'organizer_payout',
+      entityId: payout.id,
+      metadata: {
+        organizerId: req.params.id,
+        reference: payout.reference,
+        amountPaise: payout.amountPaise,
+        status: payout.status,
+      },
+      ip: clientIp(req),
+    });
+    return ok(res, payout, 201);
+  }),
+);
+
+/** Correct a recorded payout — a mistyped UTR, a transfer that later failed. */
+router.patch(
+  '/payouts/:payoutId',
+  validate({
+    params: z.object({ payoutId: z.string().uuid() }),
+    body: payoutService.PAYOUT_PATCH,
+  }),
+  asyncHandler(async (req, res) => {
+    const admin = currentUser(req);
+    const payout = await payoutService.updatePayout(req.params.payoutId, req.body);
+    await audit({
+      actorId: admin.id,
+      actorRole: 'admin',
+      action: 'organizer.payout.updated',
+      entityType: 'organizer_payout',
+      entityId: payout.id,
+      metadata: { organizerId: payout.organizerId, changes: req.body },
+      ip: clientIp(req),
+    });
+    return ok(res, payout);
+  }),
+);
+
+router.delete(
+  '/payouts/:payoutId',
+  validate({ params: z.object({ payoutId: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const admin = currentUser(req);
+    const removed = await payoutService.deletePayout(req.params.payoutId);
+    await audit({
+      actorId: admin.id,
+      actorRole: 'admin',
+      action: 'organizer.payout.deleted',
+      entityType: 'organizer_payout',
+      entityId: req.params.payoutId,
+      metadata: removed,
+      ip: clientIp(req),
+    });
+    return ok(res, { deleted: true, reference: removed.reference });
+  }),
+);
+
+/** The payout ledger for one organizer, as CSV, for the accounts team. */
+router.get(
+  '/organizers/:id/payouts/export',
+  validate({ params: z.object({ id: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const organizer = await queryOne<{ slug: string }>('SELECT slug FROM organizers WHERE id = $1', [req.params.id]);
+    if (!organizer) throw new NotFoundError('Organizer');
+
+    const { payouts } = await payoutService.listPayouts(req.params.id, { limit: 5000 });
+    const csv = toCsv(payouts, [
+      { header: 'Reference', value: (r) => r.reference },
+      { header: 'Status', value: (r) => r.status },
+      { header: 'Method', value: (r) => r.method },
+      { header: 'Amount', value: (r) => paiseToRupees(r.amountPaise).toFixed(2) },
+      { header: 'TDS', value: (r) => paiseToRupees(r.tdsPaise).toFixed(2) },
+      { header: 'Charges', value: (r) => paiseToRupees(r.feePaise).toFixed(2) },
+      { header: 'Net Transferred', value: (r) => paiseToRupees(r.netPaise).toFixed(2) },
+      { header: 'UTR', value: (r) => r.utr ?? '' },
+      { header: 'Period Start', value: (r) => r.periodStart ?? '' },
+      { header: 'Period End', value: (r) => r.periodEnd ?? '' },
+      { header: 'Destination', value: (r) => r.destination ?? '' },
+      { header: 'Paid At', value: (r) => (r.paidAt ? r.paidAt.toISOString() : '') },
+      { header: 'Recorded By', value: (r) => r.createdBy?.fullName ?? '' },
+      { header: 'Recorded At', value: (r) => r.createdAt.toISOString() },
+      { header: 'Notes', value: (r) => r.notes ?? '' },
+    ]);
+
+    return sendCsv(res, csvFilename(`tixit-${organizer.slug}-payouts`), csv);
+  }),
+);
+
+/* ─────────────────────── KYC review ─────────────────────── */
+
+router.post(
+  '/organizers/:id/kyc/review',
+  validate({
+    params: z.object({ id: z.string().uuid() }),
+    body: z.object({
+      decision: z.enum(['approved', 'rejected', 'pending']),
+      reason: z.string().trim().max(500).optional(),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const admin = currentUser(req);
+    if (req.body.decision === 'rejected' && (req.body.reason ?? '').trim().length < 5) {
+      throw new ConflictError('Tell the organizer what needs fixing', 'REASON_REQUIRED');
+    }
+
+    const kyc = await kycService.reviewKyc(req.params.id, req.body.decision, admin.id, req.body.reason);
+
+    if (kyc.status === 'approved') {
+      sendMailAsync({
+        to: kyc.contactEmail,
+        template: 'kyc_approved',
+        data: { name: kyc.contactName, organizerName: kyc.organizerName },
+      });
+    } else if (kyc.status === 'rejected') {
+      sendMailAsync({
+        to: kyc.contactEmail,
+        template: 'kyc_rejected',
+        data: {
+          name: kyc.contactName,
+          organizerName: kyc.organizerName,
+          reason: kyc.rejectionReason ?? 'Some details could not be verified.',
+        },
+      });
+    }
+
+    await audit({
+      actorId: admin.id,
+      actorRole: 'admin',
+      action: `organizer.kyc.${req.body.decision}`,
+      entityType: 'organizer',
+      entityId: req.params.id,
+      metadata: { reason: req.body.reason },
+      ip: clientIp(req),
+    });
+    return ok(res, kyc);
   }),
 );
 

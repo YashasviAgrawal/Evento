@@ -3,12 +3,14 @@ import { z } from 'zod';
 import { authenticate, currentOrganizerId, currentUser, requireOrganizer } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
 import { query, queryOne } from '../../db/pool';
-import { asyncHandler, buildPageMeta, ok, paginated, sendCsv } from '../../utils/http';
+import { asyncHandler, buildPageMeta, clientIp, ok, paginated, sendCsv } from '../../utils/http';
 import { csvFilename, toCsv } from '../../utils/csv';
 import { paiseToRupees } from '../../utils/money';
 import { NotFoundError } from '../../utils/errors';
+import { audit } from '../../services/audit.service';
 import * as reportService from '../reports/report.service';
 import * as ticketService from '../tickets/ticket.service';
+import * as kycService from '../payouts/kyc.service';
 import { assertEventOwnership } from '../events/event.service';
 
 const router = Router();
@@ -98,6 +100,36 @@ router.patch(
       ],
     );
     return ok(res, { message: 'Profile updated' });
+  }),
+);
+
+/* ─────────────────────── KYC / payout details ─────────────────────── */
+
+/**
+ * The organizer's own KYC record. Returned in full — it is their data, and
+ * they need to see the account number to check it is the right one.
+ */
+router.get(
+  '/kyc',
+  asyncHandler(async (req, res) => {
+    return ok(res, await kycService.getKycState(currentOrganizerId(req)));
+  }),
+);
+
+router.post(
+  '/kyc',
+  validate({ body: kycService.KYC_FIELDS }),
+  asyncHandler(async (req, res) => {
+    const kyc = await kycService.submitKyc(currentOrganizerId(req), req.body);
+    await audit({
+      actorId: currentUser(req).id,
+      actorRole: currentUser(req).role,
+      action: 'organizer.kyc.submitted',
+      entityType: 'organizer',
+      entityId: kyc.organizerId,
+      ip: clientIp(req),
+    });
+    return ok(res, kyc);
   }),
 );
 
