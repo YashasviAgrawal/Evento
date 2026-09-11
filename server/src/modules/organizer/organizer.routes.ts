@@ -53,6 +53,15 @@ router.get(
   }),
 );
 
+/**
+ * The public-facing profile only.
+ *
+ * PAN, GSTIN and the registered address are deliberately *not* editable here:
+ * they are the facts an admin reviewed to verify the account, so they are owned
+ * by the KYC submission and change only by resubmitting it. Accepting them on
+ * this route as well would let a verified organizer quietly replace details
+ * that were signed off.
+ */
 router.patch(
   '/profile',
   validate({
@@ -63,9 +72,6 @@ router.patch(
       website: z.string().url().max(300).optional().nullable(),
       supportEmail: z.string().email().max(254).optional().nullable(),
       supportPhone: z.string().trim().max(20).optional().nullable(),
-      gstin: z.string().trim().max(20).optional().nullable(),
-      pan: z.string().trim().max(15).optional().nullable(),
-      address: z.string().trim().max(500).optional().nullable(),
       cityId: z.string().uuid().optional().nullable(),
     }),
   }),
@@ -80,10 +86,7 @@ router.patch(
          website       = COALESCE($5, website),
          support_email = COALESCE($6, support_email),
          support_phone = COALESCE($7, support_phone),
-         gstin         = COALESCE($8, gstin),
-         pan           = COALESCE($9, pan),
-         address       = COALESCE($10, address),
-         city_id       = COALESCE($11, city_id)
+         city_id       = COALESCE($8, city_id)
        WHERE id = $1`,
       [
         organizerId,
@@ -93,9 +96,6 @@ router.patch(
         b.website ?? null,
         b.supportEmail ?? null,
         b.supportPhone ?? null,
-        b.gstin ?? null,
-        b.pan ?? null,
-        b.address ?? null,
         b.cityId ?? null,
       ],
     );
@@ -106,8 +106,9 @@ router.patch(
 /* ─────────────────────── KYC / payout details ─────────────────────── */
 
 /**
- * The organizer's own KYC record. Returned in full — it is their data, and
- * they need to see the account number to check it is the right one.
+ * The organizer's own KYC submission and the verification decision on it —
+ * one and the same review. Returned in full, including the account number:
+ * it is their data, and they need to check it is the right account.
  */
 router.get(
   '/kyc',
@@ -120,16 +121,17 @@ router.post(
   '/kyc',
   validate({ body: kycService.KYC_FIELDS }),
   asyncHandler(async (req, res) => {
-    const kyc = await kycService.submitKyc(currentOrganizerId(req), req.body);
+    const organizerId = currentOrganizerId(req);
+    const state = await kycService.submitKyc(organizerId, req.body);
     await audit({
       actorId: currentUser(req).id,
       actorRole: currentUser(req).role,
       action: 'organizer.kyc.submitted',
       entityType: 'organizer',
-      entityId: kyc.organizerId,
+      entityId: organizerId,
       ip: clientIp(req),
     });
-    return ok(res, kyc);
+    return ok(res, state);
   }),
 );
 

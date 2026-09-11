@@ -11,14 +11,16 @@ import { useToast } from '@/components/ui/toast';
 import { formatDateTime } from '@/lib/format';
 
 /**
- * Payout KYC.
+ * KYC — which is also the organizer's account verification. There is one
+ * review, not two: an admin approves this submission and the account becomes
+ * verified, so this form is the single thing standing between signing up and
+ * selling tickets.
  *
- * Everything the finance team needs before it can send an organizer money:
- * who they are (PAN), what the business is (GSTIN, registered address) and
- * where the money goes (account, IFSC, holder name). Validation mirrors the
- * server's — the same formats are enforced again in the API and the database,
- * because an unpayable account number is expensive to discover at transfer
- * time.
+ * It collects who they are (PAN), what the business is (GSTIN, registered
+ * address) and where the money goes (account, IFSC, holder name). Validation
+ * mirrors the server's — the same formats are enforced again in the API and in
+ * the database, because an unpayable account number is expensive to discover
+ * at transfer time.
  */
 
 const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
@@ -116,7 +118,7 @@ export default function OrganizerKycPage() {
 
     setSaving(true);
     try {
-      const { data } = await api.post<KycState['kyc']>('/organizer/kyc', {
+      const { data } = await api.post<KycState>('/organizer/kyc', {
         legalName: form.legalName.trim(),
         pan: form.pan.trim().toUpperCase(),
         businessName: form.businessName.trim(),
@@ -127,8 +129,8 @@ export default function OrganizerKycPage() {
         ifsc: form.ifsc.trim().toUpperCase(),
         bankName: form.bankName.trim() || null,
       });
-      setState({ status: 'pending', payoutsEnabled: false, kyc: data });
-      toast.success('Details submitted', 'Our team will verify them, usually within a working day.');
+      setState(data);
+      toast.success('Submitted for verification', 'Our team reviews these, usually within a working day.');
     } catch (err) {
       toast.error('Could not submit', err instanceof ApiError ? (err.fieldMessages[0] ?? err.message) : undefined);
     } finally {
@@ -137,21 +139,25 @@ export default function OrganizerKycPage() {
   }
 
   if (loading) return <Skeleton className="h-96 rounded-xl" />;
-  if (!state) return <p className="text-sm text-ink-500">Could not load your payout details.</p>;
+  if (!state) return <p className="text-sm text-ink-500">Could not load your verification details.</p>;
 
-  // Approved details are frozen: changing a verified bank account is a review
-  // decision, so the screen becomes a read-only summary.
+  // Approved details are frozen: changing the bank account behind a verified
+  // account is a review decision, so the screen becomes a read-only summary.
   if (state.status === 'approved' && state.kyc) {
     const kyc = state.kyc;
     return (
       <div className="max-w-3xl space-y-6">
-        <PageHeader title="Payout details" description="Verified — this is where your ticket revenue is settled" />
+        <PageHeader
+          title="KYC verification"
+          description="Your account is verified — this is the identity and account we hold for you"
+        />
 
-        <Alert tone="success" title="Verified">
+        <Alert tone="success" title="Verified organizer">
           <span className="inline-flex items-center gap-1.5">
             <BadgeCheck className="h-4 w-4" />
-            Your payout details were verified
-            {kyc.reviewedAt ? ` on ${formatDateTime(kyc.reviewedAt)}` : ''}.
+            Your KYC was approved
+            {state.verifiedAt ? ` on ${formatDateTime(state.verifiedAt)}` : ''} — you can publish events, and your
+            ticket revenue is settled to the account below.
           </span>
         </Alert>
 
@@ -161,7 +167,7 @@ export default function OrganizerKycPage() {
             <h2 className="text-base font-bold text-ink-900">Locked details</h2>
           </div>
           <p className="mb-4 text-xs text-ink-500">
-            To change any of these, contact support — verified bank details cannot be edited from the dashboard.
+            To change any of these, contact support — verified details cannot be edited from the dashboard.
           </p>
 
           <dl className="divide-y divide-ink-100">
@@ -185,27 +191,27 @@ export default function OrganizerKycPage() {
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
-        title="Payout details"
-        description="Verify your identity and bank account so we can settle your ticket revenue"
+        title="KYC verification"
+        description="One submission verifies your account and sets up your payouts"
       />
 
       {state.status === 'pending' ? (
         <Alert tone="warning" title="Under review">
           <span className="inline-flex items-center gap-1.5">
             <Clock className="h-4 w-4" />
-            We&rsquo;re verifying the details you submitted
-            {state.kyc ? ` on ${formatDateTime(state.kyc.submittedAt)}` : ''}. You can still correct them below until
-            they&rsquo;re approved.
+            We&rsquo;re reviewing the KYC you submitted
+            {state.kyc ? ` on ${formatDateTime(state.kyc.submittedAt)}` : ''}. Approving it verifies your account. You
+            can still correct the details below until then.
           </span>
         </Alert>
       ) : state.status === 'rejected' ? (
-        <Alert tone="error" title="Details need changing">
-          {state.kyc?.rejectionReason ?? 'Some details could not be verified. Please check them and submit again.'}
+        <Alert tone="error" title="Your details need changing">
+          {state.rejectionReason ?? 'Some details could not be verified. Please check them and submit again.'}
         </Alert>
       ) : (
-        <Alert tone="info" title="One-time setup">
-          No money can be released until these details are verified, so it&rsquo;s worth completing before your first
-          event goes live.
+        <Alert tone="info" title="This is the only verification step">
+          Your account is verified on the strength of this submission — you can&rsquo;t publish an event or be paid
+          until it&rsquo;s approved, so it&rsquo;s worth completing now.
         </Alert>
       )}
 
@@ -336,6 +342,9 @@ export default function OrganizerKycPage() {
             <ShieldCheck className="h-4 w-4" />
             {isResubmission ? 'Submit again for review' : 'Submit for verification'}
           </Button>
+          {state.status === 'not_submitted' && (
+            <span className="text-xs text-ink-500">Usually reviewed within a working day.</span>
+          )}
           {state.kyc && (
             <span className="text-xs text-ink-500">
               Last submitted {formatDateTime(state.kyc.submittedAt)} · <StatusBadge status={state.status} />

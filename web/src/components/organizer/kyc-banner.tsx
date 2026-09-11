@@ -8,13 +8,14 @@ import { Alert } from '@/components/ui/index';
 import { ButtonLink } from '@/components/ui/button';
 
 /**
- * The nag that follows a new organizer around the dashboard until their payout
- * details are verified.
+ * The nag that follows a new organizer around the dashboard until they are
+ * verified — which, since approving KYC *is* verification, means until their
+ * KYC has been submitted and approved.
  *
  * It is a banner rather than a hard redirect on purpose: an organizer should be
- * able to look around and start building an event before handing over a bank
- * account. The gate that actually matters is on the money — no payout can be
- * recorded against an organizer whose KYC is not approved.
+ * able to look around and draft an event before handing over a bank account.
+ * The gates that actually bite are elsewhere — an unverified organizer cannot
+ * publish an event or be paid.
  */
 export function KycBanner() {
   const pathname = usePathname();
@@ -43,20 +44,20 @@ export function KycBanner() {
   const copy = {
     not_submitted: {
       tone: 'warning' as const,
-      title: 'Add your payout details',
-      body: 'We need your PAN, business details and bank account before any ticket revenue can be released to you.',
+      title: 'Complete your KYC to get verified',
+      body: 'We need your PAN, business details and bank account. This is the only verification step — your account is approved on the strength of it, and you cannot publish an event or be paid until then.',
       cta: 'Complete KYC',
     },
     pending: {
       tone: 'info' as const,
-      title: 'Payout details under review',
-      body: 'Our team is verifying the details you submitted. Payouts start once they are approved.',
+      title: 'Your KYC is under review',
+      body: 'Our team is checking the details you submitted. Your account is verified as soon as they are approved.',
       cta: 'View submission',
     },
     rejected: {
       tone: 'error' as const,
-      title: 'Your payout details need changing',
-      body: state.kyc?.rejectionReason ?? 'Some details could not be verified. Correct them and submit again.',
+      title: 'Your KYC needs changing',
+      body: state.rejectionReason ?? 'Some details could not be verified. Correct them and submit again.',
       cta: 'Fix details',
     },
   }[state.status];

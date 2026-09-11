@@ -57,7 +57,7 @@ export default function AdminPaymentsPage() {
     <div>
       <PageHeader
         title="Organizer payments"
-        description="Earnings, payouts and outstanding balances across every organizer"
+        description="Verification, earnings, payouts and outstanding balances across every organizer"
       />
 
       <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -121,11 +121,11 @@ export default function AdminPaymentsPage() {
           className="h-10 w-auto"
           aria-label="KYC status"
         >
-          <option value="">All KYC states</option>
-          <option value="approved">KYC approved</option>
-          <option value="pending">KYC awaiting review</option>
-          <option value="rejected">KYC rejected</option>
-          <option value="not_submitted">KYC not submitted</option>
+          <option value="">All verification states</option>
+          <option value="approved">Verified</option>
+          <option value="pending">Awaiting review</option>
+          <option value="rejected">Declined</option>
+          <option value="not_submitted">No KYC submitted</option>
         </Select>
 
         <Select
@@ -175,7 +175,7 @@ export default function AdminPaymentsPage() {
                 <thead className="border-b border-ink-200 bg-ink-50 text-left text-xs uppercase tracking-wide text-ink-500">
                   <tr>
                     <th className="px-5 py-3 font-semibold">Organizer</th>
-                    <th className="px-5 py-3 font-semibold">KYC</th>
+                    <th className="px-5 py-3 font-semibold">Verification</th>
                     <th className="px-5 py-3 text-right font-semibold">Gross sales</th>
                     <th className="px-5 py-3 text-right font-semibold">Commission</th>
                     <th className="px-5 py-3 text-right font-semibold">Earned</th>

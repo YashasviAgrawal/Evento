@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { BadgeCheck, Clock } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import type { City } from '@/lib/types';
 import { PageHeader } from '@/components/dashboard/shell';
 import { Button } from '@/components/ui/button';
-import { Alert, Field, Input, Skeleton, Textarea } from '@/components/ui/index';
+import { Alert, DetailRow, Field, Input, Skeleton, Textarea } from '@/components/ui/index';
 import { CityPicker } from '@/components/ui/city-picker';
 import { useToast } from '@/components/ui/toast';
 
@@ -40,9 +41,6 @@ export default function OrganizerSettingsPage() {
     website: '',
     supportEmail: '',
     supportPhone: '',
-    gstin: '',
-    pan: '',
-    address: '',
     cityId: '',
   });
 
@@ -62,9 +60,6 @@ export default function OrganizerSettingsPage() {
           website: data.website ?? '',
           supportEmail: data.supportEmail ?? '',
           supportPhone: data.supportPhone ?? '',
-          gstin: data.gstin ?? '',
-          pan: data.pan ?? '',
-          address: data.address ?? '',
           cityId: data.city?.id ?? '',
         });
       } catch {
@@ -86,9 +81,6 @@ export default function OrganizerSettingsPage() {
         website: form.website.trim() || null,
         supportEmail: form.supportEmail.trim() || null,
         supportPhone: form.supportPhone.trim() || null,
-        gstin: form.gstin.trim() || null,
-        pan: form.pan.trim() || null,
-        address: form.address.trim() || null,
         cityId: form.cityId || null,
       });
       toast.success('Profile saved');
@@ -117,8 +109,20 @@ export default function OrganizerSettingsPage() {
         <Alert tone="warning" title="Verification pending">
           <span className="inline-flex items-center gap-1.5">
             <Clock className="h-4 w-4" />
-            Our team is reviewing your account. Adding your GSTIN and PAN speeds this up.
+            Your account is verified from your{' '}
+            <Link href="/organizer/kyc" className="font-semibold underline">
+              KYC submission
+            </Link>
+            — complete it there if you haven&rsquo;t yet.
           </span>
+        </Alert>
+      ) : profile.status === 'rejected' ? (
+        <Alert tone="error" title="Verification declined">
+          Check the reason on your{' '}
+          <Link href="/organizer/kyc" className="font-semibold underline">
+            KYC submission
+          </Link>{' '}
+          and submit it again.
         </Alert>
       ) : (
         <Alert tone="error" title={`Account ${profile.status}`}>
@@ -164,28 +168,28 @@ export default function OrganizerSettingsPage() {
 
         <section className="rounded-xl border border-ink-200 bg-white p-5 shadow-card sm:p-6">
           <h2 className="mb-1 text-base font-bold text-ink-900">Business details</h2>
-          <p className="mb-5 text-xs text-ink-500">Used for verification, invoicing and payouts</p>
+          <p className="mb-5 text-xs text-ink-500">
+            PAN, GST and your registered address come from your{' '}
+            <Link href="/organizer/kyc" className="font-medium underline">
+              KYC submission
+            </Link>{' '}
+            — they are the details we verified your account on, so they change only by resubmitting it.
+          </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="GSTIN">
-              <Input
-                value={form.gstin}
-                onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
-                placeholder="22AAAAA0000A1Z5"
-                className="font-mono"
+            <dl className="divide-y divide-ink-100 sm:col-span-2">
+              <DetailRow label="PAN" value={profile.pan ? <span className="font-mono">{profile.pan}</span> : '—'} />
+              <DetailRow
+                label="GSTIN"
+                value={profile.gstin ? <span className="font-mono">{profile.gstin}</span> : 'Not registered'}
               />
-            </Field>
-
-            <Field label="PAN">
-              <Input
-                value={form.pan}
-                onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })}
-                placeholder="AAAAA0000A"
-                className="font-mono"
+              <DetailRow
+                label="Registered address"
+                value={profile.address ? <span className="whitespace-pre-line">{profile.address}</span> : '—'}
               />
-            </Field>
+            </dl>
 
-            <Field label="City">
+            <Field label="City" hint="Where customers should find you" className="sm:col-span-2">
               <CityPicker
                 cities={cities}
                 value={form.cityId}
@@ -194,10 +198,6 @@ export default function OrganizerSettingsPage() {
                 placeholder="Search any city in India…"
                 ariaLabel="Organizer city"
               />
-            </Field>
-
-            <Field label="Registered address" className="sm:col-span-2">
-              <Textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={2} />
             </Field>
           </div>
         </section>

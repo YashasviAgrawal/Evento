@@ -15,7 +15,7 @@ const NAV: NavItem[] = [
   { href: '/organizer/coupons', label: 'Coupons', icon: Tag },
   { href: '/organizer/scan', label: 'Scan Tickets', icon: QrCode },
   { href: '/organizer/reports', label: 'Reports', icon: BarChart3 },
-  { href: '/organizer/kyc', label: 'Payout Details', icon: Wallet },
+  { href: '/organizer/kyc', label: 'KYC Verification', icon: Wallet },
   { href: '/organizer/settings', label: 'Settings', icon: Settings },
 ];
 

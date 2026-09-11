@@ -253,8 +253,8 @@ An invalid signature returns `402 SIGNATURE_MISMATCH` and marks the payment fail
 
 | Method | Path | Description |
 | --- | --- | --- |
-| GET | `/profile` · PATCH `/profile` | Public profile and business details. |
-| GET | `/kyc` | Payout KYC: the submitted record and its review state. |
+| GET | `/profile` · PATCH `/profile` | Public profile. PAN, GSTIN and address are owned by KYC and not writable here. |
+| GET | `/kyc` | The KYC submission and the verification decision on it. |
 | POST | `/kyc` | Submit — or resubmit after rejection — identity, business and bank details. |
 | GET | `/dashboard` | Summary, 30-day sales series, event performance. |
 | GET | `/reports?days=30` | Same, over a chosen window. |
@@ -297,11 +297,26 @@ POST /organizer/kyc
 ```
 
 `gstin` and `bankName` are optional; everything else is required. PAN, GSTIN, IFSC and account
-number formats are enforced in the API *and* by database constraints. Submitting puts the record
-into `pending`; an approved record is locked and can only be reopened by an admin.
+number formats are enforced in the API *and* by database constraints.
 
-`GET /organizer/kyc` answers with `{ status, payoutsEnabled, kyc }`, where `status` is
-`not_submitted` · `pending` · `approved` · `rejected`.
+**This is the only organizer verification.** There is no separate account review: an admin
+approving this submission is what sets `organizers.status` to `verified`, which is in turn what
+lets the organizer publish events and be paid. Submitting puts the organizer into the review
+queue (and returns a rejected one to it, clearing the stale reason); a verified organizer's
+details are locked and can only be reopened by an admin.
+
+`GET /organizer/kyc` answers with:
+
+```jsonc
+{ "status": "pending",          // not_submitted · pending · approved · rejected — derived
+  "payoutsEnabled": false,      // verified AND a submission on file
+  "organizerStatus": "pending", // the organizer's own status, the only stored one
+  "verifiedAt": null, "rejectionReason": null, "reviewedBy": null,
+  "kyc": { "legalName": "…", "pan": "…", "accountNumber": "…", "submittedAt": "…" } }
+```
+
+`status` is computed, not stored: no submission is `not_submitted`, and otherwise it follows the
+organizer's status, so the two can never disagree.
 
 ---
 
@@ -316,16 +331,15 @@ into `pending`; an approved record is locked and can only be reopened by an admi
 | POST | `/events/:id/reject` | Reject with a reason (emailed to the organizer). |
 | POST | `/events/:id/feature` | Toggle featured placement. |
 | POST | `/events/:id/cancel` | Cancel a live event. |
-| GET | `/organizers` | Directory with revenue and verification state. |
-| POST | `/organizers/:id/verify` | Verify and notify. |
-| POST | `/organizers/:id/status` | Set pending / verified / rejected / suspended. |
+| GET | `/organizers` | Directory with revenue, verification state and KYC state. |
+| POST | `/organizers/:id/verify` | Approve the KYC, which verifies the organizer, and notify. |
+| POST | `/organizers/:id/status` | The same decision: pending / verified / rejected / suspended. |
 | POST | `/organizers/:id/commission` | Per-organizer override; `null` restores the default. |
 | GET | `/payouts` | Payout ledger index: earnings, paid and outstanding per organizer. |
 | GET | `/organizers/:id/payments` | One organizer's KYC, balance, payout ledger and per-event earnings. |
 | POST | `/organizers/:id/payouts` | Record a manual transfer. Requires approved KYC. |
 | PATCH · DELETE | `/payouts/:payoutId` | Correct or remove a recorded payout. |
 | GET | `/organizers/:id/payouts/export` | **CSV** of the payout ledger. |
-| POST | `/organizers/:id/kyc/review` | Approve, reject (with a reason) or reopen a KYC submission. |
 | GET | `/users` | Directory filterable by role and status. |
 | POST | `/users/:id/status` | Activate / suspend. Suspension revokes sessions immediately. |
 | GET · POST · PATCH · DELETE | `/coupons` | Full coupon management. |
@@ -344,6 +358,23 @@ POST /admin/coupons
 
 For coupons, `value` is a percentage when `type` is `percent`, and **rupees** when `type` is
 `flat`; `maxDiscount` and `minOrder` are always rupees.
+
+### Organizer verification
+
+```http
+POST /admin/organizers/:id/status
+{ "status": "rejected", "reason": "Account holder does not match the PAN submitted" }
+```
+
+Verification and KYC approval are one decision, so `/verify` and `/status` are the same action
+and both route through it. Consequences worth knowing:
+
+- `verified` is refused with `KYC_NOT_SUBMITTED` when the organizer has never submitted KYC —
+  there is nothing to verify them on. Accounts verified before KYC existed are grandfathered so
+  they can still be suspended and reinstated.
+- `rejected` requires a `reason` of at least 5 characters, emailed to the organizer.
+- `pending` reopens a verified account so the organizer can correct locked details.
+- Approving emails `organizer_verified`; declining emails `organizer_rejected`.
 
 ### Payouts
 
@@ -368,9 +399,9 @@ pending = earned − settled
 ```
 
 `pending` may be negative — an advance, or a refund issued after a settlement, genuinely leaves
-the organizer owing the platform. Recording a payout requires **approved** KYC, and the
-destination account is snapshotted onto the payout so a later change of bank details never
-rewrites where past money went.
+the organizer owing the platform. Recording a payout requires a **verified** organizer with KYC
+on file, and the destination account is snapshotted onto the payout so a later change of bank
+details never rewrites where past money went.
 
 ---
 

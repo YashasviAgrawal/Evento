@@ -3,7 +3,7 @@ import { query, queryOne } from '../../db/pool';
 import { generatePayoutReference } from '../../utils/ids';
 import { rupeesToPaise } from '../../utils/money';
 import { ConflictError, NotFoundError } from '../../utils/errors';
-import { getKyc, maskAccountNumber } from './kyc.service';
+import { getKycState, KYC_STATUS_SQL, maskAccountNumber, type KycStatus } from './kyc.service';
 
 /**
  * Organizer payouts.
@@ -253,26 +253,26 @@ export async function listPayouts(
 /**
  * Record a transfer the finance team has made (or is about to make).
  *
- * KYC must be approved first: sending money to details nobody has checked is
- * exactly the mistake this ledger exists to prevent. The destination is
- * snapshotted from the KYC record so a later account change cannot rewrite
- * where past payments went.
+ * The organizer must be verified, which — since verification *is* KYC approval
+ * — means their bank details have been checked by a human and there is an
+ * account to send money to. The destination is snapshotted from the KYC record
+ * so a later account change cannot rewrite where past payments went.
  */
 export async function createPayout(
   organizerId: string,
   input: PayoutInput,
   adminId: string,
 ): Promise<PayoutRecord> {
-  const organizer = await queryOne<{ id: string }>('SELECT id FROM organizers WHERE id = $1', [organizerId]);
-  if (!organizer) throw new NotFoundError('Organizer');
-
-  const kyc = await getKyc(organizerId);
-  if (kyc?.status !== 'approved') {
+  const state = await getKycState(organizerId);
+  if (!state.payoutsEnabled || !state.kyc) {
     throw new ConflictError(
-      'This organizer has no approved KYC, so a payout cannot be recorded against them yet.',
-      'KYC_NOT_APPROVED',
+      state.kyc
+        ? 'This organizer is not verified yet, so a payout cannot be recorded against them.'
+        : 'This organizer has not submitted their KYC, so there are no bank details to pay into.',
+      'ORGANIZER_NOT_VERIFIED',
     );
   }
+  const kyc = state.kyc;
 
   const destination =
     input.method === 'bank_transfer' || input.method === 'upi'
@@ -392,7 +392,7 @@ export interface OrganizerLedgerRow {
   status: string;
   logoUrl: string | null;
   contact: { fullName: string; email: string };
-  kycStatus: 'not_submitted' | 'pending' | 'approved' | 'rejected';
+  kycStatus: KycStatus;
   grossRevenuePaise: number;
   commissionPaise: number;
   earnedPaise: number;
@@ -446,23 +446,25 @@ export async function getOrganizerLedger(filters: {
       `(o.display_name ILIKE '%' || $${values.length} || '%' OR u.email ILIKE '%' || $${values.length} || '%')`,
     );
   }
-  if (filters.kycStatus === 'not_submitted') {
-    conditions.push('k.id IS NULL');
-  } else if (filters.kycStatus) {
-    values.push(filters.kycStatus);
-    conditions.push(`k.status = $${values.length}::kyc_status`);
-  }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  // Filtering on a computed balance has to happen after the lateral joins, so
-  // it is a HAVING-style predicate on the outer select rather than a WHERE.
-  const having = filters.owing ? 'WHERE pending > 0' : '';
+
+  // Both of these read computed columns — the balance needs the lateral joins,
+  // and kyc_status is a CASE over the organizer's own status — so they are
+  // predicates on the outer select rather than on the joins.
+  const outer: string[] = [];
+  if (filters.owing) outer.push('pending > 0');
+  if (filters.kycStatus) {
+    values.push(filters.kycStatus);
+    outer.push(`kyc_status = $${values.length}`);
+  }
+  const having = outer.length ? `WHERE ${outer.join(' AND ')}` : '';
   const orderBy = LEDGER_SORTS[filters.sort ?? 'pending'] ?? LEDGER_SORTS.pending;
 
   const base = `
     SELECT o.id, o.display_name, o.slug, o.status, o.logo_url,
            u.full_name, u.email,
-           COALESCE(k.status::text, 'not_submitted') AS kyc_status,
+           ${KYC_STATUS_SQL} AS kyc_status,
            bk.gross, bk.commission,
            (bk.payout - bk.refunded) AS earned,
            py.paid, py.in_transit, py.last_paid_at,

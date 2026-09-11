@@ -486,9 +486,13 @@ export interface AdminOrganizerReport {
 
 /* ─────────────────────── KYC & payouts ─────────────────────── */
 
+/**
+ * Derived, not stored: approving an organizer's KYC *is* verifying their
+ * account, so this follows the submission plus `organizers.status`.
+ */
 export type KycStatus = 'not_submitted' | 'pending' | 'approved' | 'rejected';
 
-/** The identity and bank details an organizer submits before being paid. */
+/** The identity and bank details an organizer submits at signup. */
 export interface KycRecord {
   id: string;
   organizerId: string;
@@ -501,16 +505,17 @@ export interface KycRecord {
   accountNumber: string;
   ifsc: string;
   bankName: string | null;
-  status: Exclude<KycStatus, 'not_submitted'>;
   submittedAt: string;
-  reviewedAt: string | null;
-  rejectionReason: string | null;
-  reviewedBy: { id: string; fullName: string } | null;
 }
 
 export interface KycState {
   status: KycStatus;
+  /** Verified *and* on file — a payout needs an account to send money to. */
   payoutsEnabled: boolean;
+  organizerStatus: string;
+  verifiedAt: string | null;
+  rejectionReason: string | null;
+  reviewedBy: { id: string; fullName: string } | null;
   kyc: KycRecord | null;
 }
 

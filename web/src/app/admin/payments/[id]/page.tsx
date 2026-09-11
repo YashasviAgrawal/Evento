@@ -60,20 +60,24 @@ export default function AdminOrganizerPaymentsPage({ params }: { params: Promise
     void load();
   }, [load]);
 
-  async function reviewKyc(decision: 'approved' | 'rejected' | 'pending', reason?: string) {
+  /**
+   * Approving the KYC *is* verifying the organizer — one decision, so this
+   * posts to the organizer status endpoint rather than a KYC-only one.
+   */
+  async function reviewKyc(decision: 'verified' | 'rejected' | 'pending', reason?: string) {
     setBusy(true);
     try {
-      await api.post(`/admin/organizers/${id}/kyc/review`, { decision, reason });
+      await api.post(`/admin/organizers/${id}/status`, { status: decision, reason });
       toast.success(
-        decision === 'approved'
-          ? 'KYC approved — payouts unlocked'
+        decision === 'verified'
+          ? 'Organizer verified — they can publish events and be paid'
           : decision === 'rejected'
-            ? 'KYC rejected and the organizer notified'
-            : 'KYC reopened for editing',
+            ? 'Declined, and the organizer has been told why'
+            : 'Reopened — the organizer can edit and resubmit',
       );
       await load();
     } catch (err) {
-      toast.error('Could not update KYC', err instanceof ApiError ? err.message : undefined);
+      toast.error('Could not complete that review', err instanceof ApiError ? err.message : undefined);
     } finally {
       setBusy(false);
     }
@@ -158,7 +162,6 @@ export default function AdminOrganizerPaymentsPage({ params }: { params: Promise
 
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={organizer.status} />
-        <StatusBadge status={kyc.status} />
         <span className="text-xs text-ink-500">
           Joined {formatDateTime(organizer.createdAt)} ·{' '}
           {organizer.commissionPercent === null
@@ -176,13 +179,17 @@ export default function AdminOrganizerPaymentsPage({ params }: { params: Promise
           tone={kyc.status === 'pending' ? 'warning' : 'error'}
           title={
             kyc.status === 'not_submitted'
-              ? 'No payout details submitted'
+              ? 'No KYC submitted'
               : kyc.status === 'pending'
                 ? 'KYC is awaiting your review'
-                : 'KYC was rejected'
+                : 'This organizer was declined'
           }
         >
-          Payouts cannot be recorded until this organizer&rsquo;s KYC is approved.
+          {kyc.status === 'not_submitted'
+            ? 'This organizer has not submitted their KYC, so there is nothing to verify and no account to pay into.'
+            : kyc.status === 'pending'
+              ? 'Approving the KYC below verifies the account — it is the same decision — and unlocks payouts.'
+              : 'They need to correct their KYC and submit it again before the account can be verified.'}
         </Alert>
       )}
 
@@ -437,7 +444,7 @@ function KycPanel({
 }: {
   kyc: AdminOrganizerPayments['kyc'];
   busy: boolean;
-  onReview: (decision: 'approved' | 'rejected' | 'pending', reason?: string) => void;
+  onReview: (decision: 'verified' | 'rejected' | 'pending', reason?: string) => void;
 }) {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
@@ -448,7 +455,8 @@ function KycPanel({
         <Landmark className="mx-auto h-8 w-8 text-ink-300" />
         <p className="mt-3 text-sm font-semibold text-ink-800">No KYC submitted</p>
         <p className="mt-1 text-sm text-ink-500">
-          This organizer has not yet provided their PAN, business details or bank account.
+          This organizer has not yet provided their PAN, business details or bank account, so there is nothing to
+          verify them on.
         </p>
       </section>
     );
@@ -460,20 +468,22 @@ function KycPanel({
     <section className="rounded-xl border border-ink-200 bg-white p-5 shadow-card">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-ink-900">KYC &amp; payout details</h2>
+          <h2 className="text-base font-bold text-ink-900">KYC submission</h2>
           <p className="mt-0.5 text-xs text-ink-500">
             Submitted {formatDateTime(record.submittedAt)}
-            {record.reviewedAt && record.reviewedBy
-              ? ` · reviewed by ${record.reviewedBy.fullName} on ${formatDateTime(record.reviewedAt)}`
+            {kyc.verifiedAt && kyc.reviewedBy
+              ? ` · verified by ${kyc.reviewedBy.fullName} on ${formatDateTime(kyc.verifiedAt)}`
               : ''}
+            {' · '}
+            Approving this verifies the organizer account.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {kyc.status !== 'approved' && (
-            <Button variant="success" size="sm" disabled={busy} onClick={() => onReview('approved')}>
+            <Button variant="success" size="sm" disabled={busy} onClick={() => onReview('verified')}>
               <BadgeCheck className="h-3.5 w-3.5" />
-              Approve
+              Approve &amp; verify
             </Button>
           )}
           {kyc.status !== 'rejected' && (
@@ -485,7 +495,7 @@ function KycPanel({
               onClick={() => setRejecting((open) => !open)}
             >
               <X className="h-3.5 w-3.5" />
-              Reject
+              Decline
             </Button>
           )}
           {kyc.status === 'approved' && (
@@ -497,21 +507,24 @@ function KycPanel({
         </div>
       </div>
 
-      {record.rejectionReason && kyc.status === 'rejected' && (
-        <Alert tone="error" title="Rejected" className="mb-4">
-          {record.rejectionReason}
+      {kyc.rejectionReason && kyc.status === 'rejected' && (
+        <Alert tone="error" title="Declined" className="mb-4">
+          {kyc.rejectionReason}
         </Alert>
       )}
 
       {rejecting && (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-4">
-          <Field label="What needs fixing?" hint="Sent to the organizer so they can correct and resubmit.">
+          <Field
+            label="What needs fixing?"
+            hint="Emailed to the organizer so they can correct their KYC and submit it again."
+          >
             <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={2}
               autoFocus
-              placeholder="The account holder name does not match the PAN on file."
+              placeholder="The account holder name does not match the PAN submitted."
             />
           </Field>
           <div className="mt-3 flex gap-2">
@@ -525,7 +538,7 @@ function KycPanel({
                 setReason('');
               }}
             >
-              Reject KYC
+              Decline this organizer
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setRejecting(false)}>
               Cancel

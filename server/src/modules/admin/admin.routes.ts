@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticate, currentUser, requireAdmin } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
@@ -320,11 +320,15 @@ router.get(
     const [list, count] = await Promise.all([
       query(
         `SELECT o.id, o.display_name, o.slug, o.status, o.commission_percent, o.total_events,
-                o.created_at, o.verified_at, o.logo_url, o.gstin, o.pan,
+                o.created_at, o.verified_at, o.logo_url, o.gstin, o.pan, o.rejection_reason,
                 u.full_name, u.email, u.phone,
+                ${kycService.KYC_STATUS_SQL} AS kyc_status,
+                k.submitted_at AS kyc_submitted_at,
                 (SELECT COALESCE(sum(b.total_paise), 0)::bigint FROM bookings b
                   WHERE b.organizer_id = o.id AND b.status IN ('confirmed','refunded','partially_refunded')) AS revenue
-           FROM organizers o JOIN users u ON u.id = o.user_id
+           FROM organizers o
+           JOIN users u ON u.id = o.user_id
+           LEFT JOIN organizer_kyc k ON k.organizer_id = o.id
            ${where}
            ORDER BY (o.status = 'pending') DESC, o.created_at DESC
            LIMIT $${values.length - 1} OFFSET $${values.length}`,
@@ -350,6 +354,9 @@ router.get(
         logoUrl: row.logo_url,
         gstin: row.gstin,
         pan: row.pan,
+        rejectionReason: row.rejection_reason,
+        kycStatus: row.kyc_status,
+        kycSubmittedAt: row.kyc_submitted_at,
         revenuePaise: Number(row.revenue),
         user: { fullName: row.full_name, email: row.email, phone: row.phone },
       })),
@@ -444,37 +451,56 @@ router.get(
   }),
 );
 
+/**
+ * The one organizer review decision.
+ *
+ * Verification *is* KYC approval — there is no second gate — so approving here
+ * is the admin signing off on the details the organizer submitted at signup,
+ * and an organizer with nothing on file cannot be verified at all.
+ */
+async function reviewOrganizerRequest(
+  req: Request,
+  res: Response,
+  decision: kycService.ReviewDecision,
+  reason?: string,
+) {
+  const admin = currentUser(req);
+  const result = await kycService.reviewOrganizer(req.params.id!, decision, admin.id, reason);
+
+  if (decision === 'verified') {
+    sendMailAsync({
+      to: result.contactEmail,
+      template: 'organizer_verified',
+      data: { name: result.contactName, organizerName: result.organizerName },
+    });
+  } else if (decision === 'rejected') {
+    sendMailAsync({
+      to: result.contactEmail,
+      template: 'organizer_rejected',
+      data: {
+        name: result.contactName,
+        organizerName: result.organizerName,
+        reason: reason ?? 'Some of the details you submitted could not be verified.',
+      },
+    });
+  }
+
+  await audit({
+    actorId: admin.id,
+    actorRole: 'admin',
+    action: `organizer.${decision}`,
+    entityType: 'organizer',
+    entityId: req.params.id,
+    metadata: { reason, viaKyc: result.kyc !== null },
+    ip: clientIp(req),
+  });
+  return ok(res, result);
+}
+
 router.post(
   '/organizers/:id/verify',
   validate({ params: z.object({ id: z.string().uuid() }) }),
-  asyncHandler(async (req, res) => {
-    const admin = currentUser(req);
-    const { rows } = await query<{ display_name: string; email: string; full_name: string }>(
-      `UPDATE organizers o
-          SET status = 'verified', verified_at = now(), verified_by = $2, rejection_reason = NULL
-        FROM users u
-        WHERE o.id = $1 AND u.id = o.user_id
-        RETURNING o.display_name, u.email, u.full_name`,
-      [req.params.id, admin.id],
-    );
-    if (rows.length === 0) throw new NotFoundError('Organizer');
-
-    const organizer = rows[0]!;
-    sendMailAsync({
-      to: organizer.email,
-      template: 'organizer_verified',
-      data: { name: organizer.full_name, organizerName: organizer.display_name },
-    });
-
-    await audit({
-      actorId: admin.id,
-      actorRole: 'admin',
-      action: 'organizer.verified',
-      entityType: 'organizer',
-      entityId: req.params.id,
-    });
-    return ok(res, { status: 'verified' });
-  }),
+  asyncHandler(async (req, res) => reviewOrganizerRequest(req, res, 'verified')),
 );
 
 router.post(
@@ -487,20 +513,10 @@ router.post(
     }),
   }),
   asyncHandler(async (req, res) => {
-    const { rowCount } = await query(
-      `UPDATE organizers SET status = $2::organizer_status, rejection_reason = $3 WHERE id = $1`,
-      [req.params.id, req.body.status, req.body.reason ?? null],
-    );
-    if (!rowCount) throw new NotFoundError('Organizer');
-    await audit({
-      actorId: currentUser(req).id,
-      actorRole: 'admin',
-      action: `organizer.${req.body.status}`,
-      entityType: 'organizer',
-      entityId: req.params.id,
-      metadata: { reason: req.body.reason },
-    });
-    return ok(res, { status: req.body.status });
+    if (req.body.status === 'rejected' && (req.body.reason ?? '').trim().length < 5) {
+      throw new ConflictError('Tell the organizer what needs fixing', 'REASON_REQUIRED');
+    }
+    return reviewOrganizerRequest(req, res, req.body.status, req.body.reason);
   }),
 );
 
@@ -1162,56 +1178,6 @@ router.get(
     ]);
 
     return sendCsv(res, csvFilename(`tixit-${organizer.slug}-payouts`), csv);
-  }),
-);
-
-/* ─────────────────────── KYC review ─────────────────────── */
-
-router.post(
-  '/organizers/:id/kyc/review',
-  validate({
-    params: z.object({ id: z.string().uuid() }),
-    body: z.object({
-      decision: z.enum(['approved', 'rejected', 'pending']),
-      reason: z.string().trim().max(500).optional(),
-    }),
-  }),
-  asyncHandler(async (req, res) => {
-    const admin = currentUser(req);
-    if (req.body.decision === 'rejected' && (req.body.reason ?? '').trim().length < 5) {
-      throw new ConflictError('Tell the organizer what needs fixing', 'REASON_REQUIRED');
-    }
-
-    const kyc = await kycService.reviewKyc(req.params.id, req.body.decision, admin.id, req.body.reason);
-
-    if (kyc.status === 'approved') {
-      sendMailAsync({
-        to: kyc.contactEmail,
-        template: 'kyc_approved',
-        data: { name: kyc.contactName, organizerName: kyc.organizerName },
-      });
-    } else if (kyc.status === 'rejected') {
-      sendMailAsync({
-        to: kyc.contactEmail,
-        template: 'kyc_rejected',
-        data: {
-          name: kyc.contactName,
-          organizerName: kyc.organizerName,
-          reason: kyc.rejectionReason ?? 'Some details could not be verified.',
-        },
-      });
-    }
-
-    await audit({
-      actorId: admin.id,
-      actorRole: 'admin',
-      action: `organizer.kyc.${req.body.decision}`,
-      entityType: 'organizer',
-      entityId: req.params.id,
-      metadata: { reason: req.body.reason },
-      ip: clientIp(req),
-    });
-    return ok(res, kyc);
   }),
 );
 
