@@ -49,9 +49,20 @@ export interface TemplateData {
     bookingCode: string;
     ticketUrl: string;
   };
+  // Verification is KYC approval — one decision, so one pair of emails.
   organizer_verified: { name: string; organizerName: string };
+  organizer_rejected: { name: string; organizerName: string; reason: string };
   event_approved: { name: string; eventTitle: string; eventUrl: string };
   event_rejected: { name: string; eventTitle: string; reason: string };
+  payout_sent: {
+    name: string;
+    organizerName: string;
+    reference: string;
+    amountPaise: number;
+    method: string;
+    utr: string | null;
+    periodLabel: string;
+  };
 }
 
 export type TemplateName = keyof TemplateData;
@@ -223,7 +234,8 @@ export function renderTemplate<T extends TemplateName>(name: T, data: TemplateDa
 
     case 'organizer_verified': {
       const d = data as TemplateData['organizer_verified'];
-      const body = `<p><strong>${d.organizerName}</strong> has been verified. You can now publish events and start selling tickets.</p>`;
+      const body = `<p>We have checked the KYC details you submitted and <strong>${d.organizerName}</strong> is now verified. You can publish events and start selling tickets, and your ticket revenue will be settled to the bank account you gave us.</p>
+        <p style="color:#71717a;font-size:13px;">To change your PAN, GST or bank details later, contact support — verified details cannot be edited from the dashboard.</p>`;
       return {
         subject: 'Your organizer account is verified ✅',
         html: layout(`Congratulations, ${d.name}`, body, {
@@ -231,6 +243,21 @@ export function renderTemplate<T extends TemplateName>(name: T, data: TemplateDa
           url: `${env.webBaseUrl}/organizer`,
         }),
         text: `${d.organizerName} has been verified. Publish your first event at ${env.webBaseUrl}/organizer`,
+      };
+    }
+
+    case 'organizer_rejected': {
+      const d = data as TemplateData['organizer_rejected'];
+      const body = `<p>We could not verify the KYC details submitted for <strong>${d.organizerName}</strong>, so the account has not been approved yet.</p>
+        ${detailRows([['Reason', d.reason]])}
+        <p>Correct the details and submit them again — we&rsquo;ll take another look.</p>`;
+      return {
+        subject: 'Action needed: your organizer verification',
+        html: layout('Your details need changing', body, {
+          label: 'Update my details',
+          url: `${env.webBaseUrl}/organizer/kyc`,
+        }),
+        text: `The KYC details for ${d.organizerName} could not be verified. Reason: ${d.reason}. Update them at ${env.webBaseUrl}/organizer/kyc`,
       };
     }
 
@@ -256,6 +283,26 @@ export function renderTemplate<T extends TemplateName>(name: T, data: TemplateDa
           url: `${env.webBaseUrl}/organizer/events`,
         }),
         text: `${d.eventTitle} was not approved. Reason: ${d.reason}`,
+      };
+    }
+
+    case 'payout_sent': {
+      const d = data as TemplateData['payout_sent'];
+      const rows: Array<[string, string]> = [
+        ['Reference', d.reference],
+        ['Amount transferred', formatINR(d.amountPaise)],
+        ['Method', d.method],
+      ];
+      if (d.utr) rows.push(['Bank reference (UTR)', d.utr]);
+      if (d.periodLabel) rows.push(['Period covered', d.periodLabel]);
+
+      const body = `<p>A payout for <strong>${d.organizerName}</strong> is on its way to your registered bank account.</p>
+        ${detailRows(rows)}
+        <p style="color:#71717a;font-size:13px;">Bank transfers usually land within one working day. Quote the reference above if you need to ask us about it.</p>`;
+      return {
+        subject: `Payout ${d.reference} · ${formatINR(d.amountPaise)}`,
+        html: layout('Payout sent 💸', body),
+        text: `Payout ${d.reference} of ${formatINR(d.amountPaise)} has been sent for ${d.organizerName}.`,
       };
     }
 

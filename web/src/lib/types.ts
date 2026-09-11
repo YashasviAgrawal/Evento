@@ -484,6 +484,158 @@ export interface AdminOrganizerReport {
   coupons: { total: number; pending: number; approved: number; redemptions: number; discountPaise: number };
 }
 
+/* ─────────────────────── KYC & payouts ─────────────────────── */
+
+/**
+ * Derived, not stored: approving an organizer's KYC *is* verifying their
+ * account, so this follows the submission plus `organizers.status`.
+ */
+export type KycStatus = 'not_submitted' | 'pending' | 'approved' | 'rejected';
+
+/** The identity and bank details an organizer submits at signup. */
+export interface KycRecord {
+  id: string;
+  organizerId: string;
+  legalName: string;
+  pan: string;
+  businessName: string;
+  gstin: string | null;
+  businessAddress: string;
+  accountHolderName: string;
+  accountNumber: string;
+  ifsc: string;
+  bankName: string | null;
+  submittedAt: string;
+}
+
+export interface KycState {
+  status: KycStatus;
+  /** Verified *and* on file — a payout needs an account to send money to. */
+  payoutsEnabled: boolean;
+  organizerStatus: string;
+  verifiedAt: string | null;
+  rejectionReason: string | null;
+  reviewedBy: { id: string; fullName: string } | null;
+  kyc: KycRecord | null;
+}
+
+export type PayoutMethod = 'bank_transfer' | 'upi' | 'cheque' | 'cash' | 'other';
+export type PayoutStatus = 'pending' | 'processing' | 'paid' | 'failed' | 'cancelled';
+
+/** One recorded transfer from the platform to an organizer. */
+export interface PayoutRecord {
+  id: string;
+  reference: string;
+  organizerId: string;
+  amountPaise: number;
+  tdsPaise: number;
+  feePaise: number;
+  netPaise: number;
+  method: PayoutMethod;
+  status: PayoutStatus;
+  utr: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  destination: string | null;
+  notes: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  createdBy: { id: string; fullName: string } | null;
+}
+
+export interface PayoutSummary {
+  grossRevenuePaise: number;
+  commissionPaise: number;
+  taxPaise: number;
+  convenienceFeePaise: number;
+  refundedPaise: number;
+  /** Lifetime earnings owed to the organizer, net of commission and refunds. */
+  earnedPaise: number;
+  paidPaise: number;
+  /** Recorded but not yet cleared. */
+  inTransitPaise: number;
+  /** earned − paid − inTransit. Negative means the organizer was overpaid. */
+  pendingPaise: number;
+  tdsPaise: number;
+  feePaise: number;
+  payoutCount: number;
+  lastPayoutAt: string | null;
+  ticketsSold: number;
+  totalBookings: number;
+}
+
+/** Per-event earnings, so a payout can be reconciled against what it covers. */
+export interface EventEarnings {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  startsAt: string;
+  bookings: number;
+  tickets: number;
+  grossRevenuePaise: number;
+  commissionPaise: number;
+  taxPaise: number;
+  refundedPaise: number;
+  earnedPaise: number;
+}
+
+/** Everything behind /admin/payments/[id]. */
+export interface AdminOrganizerPayments {
+  organizer: {
+    id: string;
+    displayName: string;
+    slug: string;
+    status: string;
+    logoUrl: string | null;
+    commissionPercent: number | null;
+    createdAt: string;
+    user: { fullName: string; email: string; phone: string | null };
+  };
+  kyc: KycState;
+  summary: PayoutSummary;
+  payouts: PayoutRecord[];
+  events: EventEarnings[];
+  meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean };
+}
+
+/** One row of the admin payouts index. */
+export interface OrganizerLedgerRow {
+  id: string;
+  displayName: string;
+  slug: string;
+  status: string;
+  logoUrl: string | null;
+  contact: { fullName: string; email: string };
+  kycStatus: KycStatus;
+  grossRevenuePaise: number;
+  commissionPaise: number;
+  earnedPaise: number;
+  paidPaise: number;
+  inTransitPaise: number;
+  pendingPaise: number;
+  lastPayoutAt: string | null;
+}
+
+export interface LedgerTotals {
+  organizers: number;
+  kycPending: number;
+  kycApproved: number;
+  kycMissing: number;
+  grossRevenuePaise: number;
+  commissionPaise: number;
+  earnedPaise: number;
+  paidPaise: number;
+  inTransitPaise: number;
+  pendingPaise: number;
+}
+
+export interface AdminPayoutLedgerResponse {
+  organizers: OrganizerLedgerRow[];
+  totals: LedgerTotals;
+  meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean };
+}
+
 export interface CheckInResult {
   status: 'admitted' | 'already_used' | 'invalid' | 'wrong_event' | 'cancelled';
   message: string;

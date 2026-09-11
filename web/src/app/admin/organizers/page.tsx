@@ -1,12 +1,14 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { BadgeCheck, Ban, BarChart3, Percent, Search, ShieldCheck } from 'lucide-react';
+import { BadgeCheck, Ban, BarChart3, Percent, Search, ShieldCheck, Wallet } from 'lucide-react';
 import { api, ApiError, type PageMeta } from '@/lib/api';
+import type { KycStatus } from '@/lib/types';
 import { PageHeader } from '@/components/dashboard/shell';
 import { Button, ButtonLink } from '@/components/ui/button';
-import { EmptyState, Input, Select, Skeleton, StatusBadge } from '@/components/ui/index';
+import { Badge, EmptyState, Input, Select, Skeleton, StatusBadge } from '@/components/ui/index';
 import { useToast } from '@/components/ui/toast';
 import { cn, formatDateTime, formatMoney, formatNumber } from '@/lib/format';
 
@@ -21,6 +23,10 @@ interface AdminOrganizer {
   verifiedAt: string | null;
   gstin: string | null;
   pan: string | null;
+  rejectionReason: string | null;
+  /** Derived: verification and KYC approval are the same decision. */
+  kycStatus: KycStatus;
+  kycSubmittedAt: string | null;
   revenuePaise: number;
   user: { fullName: string; email: string; phone: string | null };
 }
@@ -179,12 +185,29 @@ function OrganizersTable() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-base font-bold text-ink-900">{organizer.displayName}</h2>
                     <StatusBadge status={organizer.status} />
+                    {organizer.kycStatus === 'not_submitted' && (
+                      <Badge tone="warning">KYC not submitted</Badge>
+                    )}
                   </div>
 
                   <p className="mt-1 text-sm text-ink-600">
                     {organizer.user.fullName} · {organizer.user.email}
                     {organizer.user.phone && ` · ${organizer.user.phone}`}
                   </p>
+
+                  {organizer.status === 'pending' && organizer.kycStatus === 'pending' && (
+                    <p className="mt-2 text-xs font-medium text-amber-700">
+                      KYC submitted {organizer.kycSubmittedAt ? formatDateTime(organizer.kycSubmittedAt) : ''} —{' '}
+                      <Link href={`/admin/payments/${organizer.id}`} className="underline">
+                        review the details
+                      </Link>{' '}
+                      before verifying.
+                    </p>
+                  )}
+
+                  {organizer.status === 'rejected' && organizer.rejectionReason && (
+                    <p className="mt-2 text-xs text-rose-700">Declined: {organizer.rejectionReason}</p>
+                  )}
 
                   <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-500">
                     <span>{formatNumber(organizer.totalEvents)} events</span>
@@ -210,17 +233,33 @@ function OrganizersTable() {
                     Report
                   </ButtonLink>
 
-                  {organizer.status !== 'verified' && (
-                    <Button
-                      variant="success"
-                      size="sm"
-                      onClick={() => verify(organizer.id)}
-                      loading={busyId === organizer.id}
-                    >
-                      <BadgeCheck className="h-3.5 w-3.5" />
-                      Verify
-                    </Button>
-                  )}
+                  <ButtonLink href={`/admin/payments/${organizer.id}`} variant="outline" size="sm">
+                    <Wallet className="h-3.5 w-3.5" />
+                    Payments
+                  </ButtonLink>
+
+                  {/*
+                    Verification is KYC approval, so there has to be a
+                    submission to approve. With none on file the button points
+                    at the payments screen, which explains what is missing.
+                  */}
+                  {organizer.status !== 'verified' &&
+                    (organizer.kycStatus === 'not_submitted' ? (
+                      <Button variant="outline" size="sm" disabled title="This organizer has not submitted their KYC">
+                        <BadgeCheck className="h-3.5 w-3.5" />
+                        Awaiting KYC
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="success"
+                        size="sm"
+                        onClick={() => verify(organizer.id)}
+                        loading={busyId === organizer.id}
+                      >
+                        <BadgeCheck className="h-3.5 w-3.5" />
+                        Verify
+                      </Button>
+                    ))}
 
                   <Button
                     variant="outline"

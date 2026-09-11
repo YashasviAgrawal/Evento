@@ -70,7 +70,10 @@ function VerifyEmailForm() {
   function destination(role = user?.role): string {
     if (next) return next;
     if (role === 'admin') return '/admin';
-    if (role === 'organizer') return '/organizer';
+    // A brand-new organizer goes straight to KYC: nothing can be paid out until
+    // those details are verified, so it is the first thing worth doing. An
+    // existing account confirming its address keeps landing on the dashboard.
+    if (role === 'organizer') return mandatory ? '/organizer/kyc' : '/organizer';
     return '/events';
   }
 

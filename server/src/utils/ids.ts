@@ -26,6 +26,11 @@ export function generateTicketCode(): string {
   return `TKT-${readableCode(8)}`;
 }
 
+/** e.g. PAY-4K7M2Q — the reference an organizer quotes when chasing a payout. */
+export function generatePayoutReference(): string {
+  return `PAY-${readableCode(6)}`;
+}
+
 export function randomToken(bytes = 32): string {
   return crypto.randomBytes(bytes).toString('hex');
 }

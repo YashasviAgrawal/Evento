@@ -1,10 +1,11 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { BarChart3, CalendarDays, LayoutDashboard, QrCode, Settings, Tag, Ticket } from 'lucide-react';
+import { BarChart3, CalendarDays, LayoutDashboard, QrCode, Settings, Tag, Ticket, Wallet } from 'lucide-react';
 import { RequireAuth } from '@/components/auth/require-auth';
 import { DashboardShell, type NavItem } from '@/components/dashboard/shell';
 import { useAuth } from '@/components/providers/auth-provider';
+import { KycBanner } from '@/components/organizer/kyc-banner';
 import { ButtonLink } from '@/components/ui/button';
 
 const NAV: NavItem[] = [
@@ -14,6 +15,7 @@ const NAV: NavItem[] = [
   { href: '/organizer/coupons', label: 'Coupons', icon: Tag },
   { href: '/organizer/scan', label: 'Scan Tickets', icon: QrCode },
   { href: '/organizer/reports', label: 'Reports', icon: BarChart3 },
+  { href: '/organizer/kyc', label: 'KYC Verification', icon: Wallet },
   { href: '/organizer/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -45,6 +47,7 @@ function OrganizerChrome({ children }: { children: React.ReactNode }) {
         </ButtonLink>
       }
     >
+      <KycBanner />
       {children}
     </DashboardShell>
   );
