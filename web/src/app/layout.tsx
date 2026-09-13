@@ -5,6 +5,7 @@ import { AuthProvider } from '@/components/providers/auth-provider';
 import { ToastProvider } from '@/components/ui/toast';
 import { Navbar } from '@/components/layout/navbar';
 import { Footer } from '@/components/layout/footer';
+import { SiteChrome } from '@/components/layout/site-chrome';
 import { PageTransition } from '@/components/layout/page-transition';
 
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME ?? 'Tixit';
@@ -103,11 +104,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AuthProvider>
             {/* Navbar reads useSearchParams, which requires a Suspense boundary
                 so the rest of the shell can still be statically rendered. */}
-            <Suspense fallback={<div className="h-16 border-b border-ink-200 bg-white" />}>
-              <Navbar />
-            </Suspense>
+            <SiteChrome>
+              <Suspense fallback={<div className="h-16 border-b border-ink-200 bg-white" />}>
+                <Navbar />
+              </Suspense>
+            </SiteChrome>
             <PageTransition>{children}</PageTransition>
-            <Footer />
+            <SiteChrome>
+              <Footer />
+            </SiteChrome>
           </AuthProvider>
         </ToastProvider>
       </body>

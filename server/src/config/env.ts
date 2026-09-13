@@ -83,6 +83,18 @@ export const env = {
     bcryptRounds: num('BCRYPT_ROUNDS', 10),
   },
 
+  /**
+   * The content management system authenticates against its own account table
+   * with its own signing key. A distinct secret is what makes the separation
+   * real: a platform access token presented to a /cms route fails signature
+   * verification, rather than depending on a role check to reject it.
+   */
+  cms: {
+    accessSecret: secret('CMS_JWT_ACCESS_SECRET', 'dev-cms-access-secret-change-me-0123456789abcdef'),
+    accessTtl: str('CMS_JWT_ACCESS_TTL', '30m'),
+    sessionTtl: str('CMS_SESSION_TTL', '7d'),
+  },
+
   otp: {
     ttlMinutes: num('OTP_TTL_MINUTES', 10),
     maxAttempts: num('OTP_MAX_ATTEMPTS', 5),
