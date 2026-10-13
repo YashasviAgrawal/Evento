@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { env } from '../../config/env';
+import { logger } from '../../config/logger';
 import { query, queryOne, withTransaction } from '../../db/pool';
 import {
   BadRequestError,
@@ -209,6 +210,37 @@ export async function register(
 }
 
 /**
+ * Tell the admins a new organizer is waiting for approval — sent to
+ * ADMIN_NOTIFY_EMAIL when set, otherwise to every active admin account.
+ * Fire-and-forget: a mail problem must never block the signup itself.
+ */
+function notifyAdminsOfOrganizerSignup(user: UserRow): void {
+  const recipients: Promise<Array<{ id: string | null; email: string }>> = env.mail.adminNotifyEmail
+    ? Promise.resolve([{ id: null, email: env.mail.adminNotifyEmail }])
+    : query<{ id: string; email: string }>(`SELECT id, email FROM users WHERE role = 'admin' AND status = 'active'`).then(
+        (r) => r.rows,
+      );
+
+  recipients
+    .then((rows) => {
+      for (const admin of rows) {
+        sendMailAsync({
+          to: admin.email,
+          template: 'organizer_signup_admin',
+          data: {
+            organizerName: user.organizer_name ?? user.full_name,
+            fullName: user.full_name,
+            email: user.email,
+            phone: user.phone,
+          },
+          userId: admin.id,
+        });
+      }
+    })
+    .catch((err) => logger.error({ err }, 'Failed to notify admins of organizer signup'));
+}
+
+/**
  * Finish a registration by redeeming the emailed code.
  *
  * This is where the account is actually created. When role = organizer the
@@ -269,6 +301,7 @@ async function completeRegistration(email: string, code: string, context: { ip?:
     data: { name: created.full_name },
     userId: created.id,
   });
+  if (created.role === 'organizer') notifyAdminsOfOrganizerSignup(created);
 
   await audit({
     actorId: created.id,
@@ -433,6 +466,7 @@ export async function loginWithGoogle(
     data: { name: created.full_name },
     userId: created.id,
   });
+  if (created.role === 'organizer') notifyAdminsOfOrganizerSignup(created);
 
   await audit({
     actorId: created.id,

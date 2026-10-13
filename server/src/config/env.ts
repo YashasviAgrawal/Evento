@@ -130,6 +130,8 @@ export const env = {
   mail: {
     resendApiKey: optional('RESEND_API_KEY'),
     from: str('MAIL_FROM', 'Tixit <tickets@tixit.in>'),
+    // Where admin alerts (e.g. new organizer signups) go. Unset → all admin accounts.
+    adminNotifyEmail: optional('ADMIN_NOTIFY_EMAIL'),
     get enabled(): boolean {
       return Boolean(optional('RESEND_API_KEY'));
     },

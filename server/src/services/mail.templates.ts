@@ -52,6 +52,8 @@ export interface TemplateData {
   // Verification is KYC approval — one decision, so one pair of emails.
   organizer_verified: { name: string; organizerName: string };
   organizer_rejected: { name: string; organizerName: string; reason: string };
+  // Sent to admins, so they know a new organizer is waiting for approval.
+  organizer_signup_admin: { organizerName: string; fullName: string; email: string; phone: string | null };
   event_approved: { name: string; eventTitle: string; eventUrl: string };
   event_rejected: { name: string; eventTitle: string; reason: string };
   payout_sent: {
@@ -258,6 +260,27 @@ export function renderTemplate<T extends TemplateName>(name: T, data: TemplateDa
           url: `${env.webBaseUrl}/organizer/kyc`,
         }),
         text: `The KYC details for ${d.organizerName} could not be verified. Reason: ${d.reason}. Update them at ${env.webBaseUrl}/organizer/kyc`,
+      };
+    }
+
+    case 'organizer_signup_admin': {
+      const d = data as TemplateData['organizer_signup_admin'];
+      // These values come straight from the signup form, so escape them.
+      const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+      const body = `<p>A new organizer has signed up and is waiting for approval.</p>
+        ${detailRows([
+          ['Organizer', esc(d.organizerName)],
+          ['Name', esc(d.fullName)],
+          ['Email', esc(d.email)],
+          ['Phone', esc(d.phone ?? '—')],
+        ])}`;
+      return {
+        subject: `New organizer signup: ${d.organizerName}`,
+        html: layout('New organizer signup', body, {
+          label: 'Review organizers',
+          url: `${env.webBaseUrl}/admin/organizers`,
+        }),
+        text: `New organizer signup: ${d.organizerName} (${d.fullName}, ${d.email}). Review at ${env.webBaseUrl}/admin/organizers`,
       };
     }
 
