@@ -1,4 +1,4 @@
-import { format, formatDistanceToNowStrict, isPast, isToday, isTomorrow, parseISO } from 'date-fns';
+import { addDays, format, formatDistanceToNowStrict, isPast, isSameDay, parseISO } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -31,31 +31,46 @@ function toDate(value: string | Date): Date {
   return typeof value === 'string' ? parseISO(value) : value;
 }
 
+/** India Standard Time, UTC+5:30 with no daylight saving. */
+const IST_OFFSET_MINUTES = 330;
+
+/**
+ * Shift an instant so date-fns `format`, which reads the runtime's local
+ * timezone, prints IST wall-clock time. Without this a server rendering in
+ * UTC shows a 6:30 PM event as 1:00 PM. Use only for display, never for
+ * comparing instants.
+ */
+function toIst(value: string | Date): Date {
+  const date = toDate(value);
+  return new Date(date.getTime() + (IST_OFFSET_MINUTES + date.getTimezoneOffset()) * 60_000);
+}
+
 export function formatEventDate(value: string | Date): string {
-  return format(toDate(value), 'EEE, d MMM yyyy');
+  return format(toIst(value), 'EEE, d MMM yyyy');
 }
 
 export function formatEventTime(value: string | Date): string {
-  return format(toDate(value), 'h:mm a');
+  return format(toIst(value), 'h:mm a');
 }
 
 export function formatEventDateTime(value: string | Date): string {
-  return format(toDate(value), "EEE, d MMM yyyy 'at' h:mm a");
+  return format(toIst(value), "EEE, d MMM yyyy 'at' h:mm a");
 }
 
 export function formatShortDate(value: string | Date): string {
-  return format(toDate(value), 'd MMM');
+  return format(toIst(value), 'd MMM');
 }
 
 export function formatDateTime(value: string | Date): string {
-  return format(toDate(value), 'd MMM yyyy, h:mm a');
+  return format(toIst(value), 'd MMM yyyy, h:mm a');
 }
 
 /** "Today", "Tomorrow", or a short date — what a listing card should show. */
 export function friendlyDate(value: string | Date): string {
-  const date = toDate(value);
-  if (isToday(date)) return 'Today';
-  if (isTomorrow(date)) return 'Tomorrow';
+  const date = toIst(value);
+  const today = toIst(new Date());
+  if (isSameDay(date, today)) return 'Today';
+  if (isSameDay(date, addDays(today, 1))) return 'Tomorrow';
   return format(date, 'EEE, d MMM');
 }
 

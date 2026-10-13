@@ -14,6 +14,7 @@ import { env } from '../../config/env';
 import * as reportService from '../reports/report.service';
 import * as payoutService from '../payouts/payout.service';
 import * as kycService from '../payouts/kyc.service';
+import { readKycDocument, sendKycDocument } from '../payouts/kyc-documents.service';
 import { processRefund } from '../payments/payment.service';
 import { cancelEvent } from '../events/event.service';
 import { invalidateCache } from '../../utils/cache';
@@ -292,6 +293,91 @@ router.post(
       metadata: { reason: req.body.reason },
     });
     return ok(res, { status: 'cancelled' });
+  }),
+);
+
+router.post(
+  '/events/:id/archive',
+  validate({ params: z.object({ id: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const event = await queryOne<{ status: string; tickets_sold: number; ends_at: Date }>(
+      'SELECT status, tickets_sold, ends_at FROM events WHERE id = $1',
+      [req.params.id],
+    );
+    if (!event) throw new NotFoundError('Event');
+    if (event.status === 'archived') throw new ConflictError('This event is already archived', 'INVALID_TRANSITION');
+    // Archiving hides the event, it does not refund anyone. Attendees of an
+    // upcoming event must go through cancellation so they get their money back.
+    if (['published', 'paused'].includes(event.status) && event.ends_at > new Date() && Number(event.tickets_sold) > 0) {
+      throw new ConflictError(
+        'This event has tickets sold and has not ended yet. Cancel it instead so attendees are refunded.',
+        'HAS_ATTENDEES',
+      );
+    }
+
+    await query(
+      `UPDATE events SET archived_from = status, status = 'archived', is_featured = false WHERE id = $1`,
+      [req.params.id],
+    );
+    invalidateCache('events:');
+    invalidateCache('catalog:');
+    await audit({
+      actorId: currentUser(req).id,
+      actorRole: 'admin',
+      action: 'event.archived',
+      entityType: 'event',
+      entityId: req.params.id,
+      metadata: { previousStatus: event.status },
+      ip: clientIp(req),
+    });
+    return ok(res, { status: 'archived' });
+  }),
+);
+
+router.post(
+  '/events/:id/unarchive',
+  validate({ params: z.object({ id: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const { rows } = await query<{ status: string }>(
+      `UPDATE events SET status = COALESCE(archived_from, 'draft'), archived_from = NULL
+        WHERE id = $1 AND status = 'archived'
+        RETURNING status`,
+      [req.params.id],
+    );
+    if (rows.length === 0) throw new ConflictError('This event is not archived', 'INVALID_TRANSITION');
+    invalidateCache('events:');
+    invalidateCache('catalog:');
+    await audit({
+      actorId: currentUser(req).id,
+      actorRole: 'admin',
+      action: 'event.unarchived',
+      entityType: 'event',
+      entityId: req.params.id,
+      metadata: { restoredStatus: rows[0]!.status },
+      ip: clientIp(req),
+    });
+    return ok(res, { status: rows[0]!.status });
+  }),
+);
+
+/* ─────────────────────── KYC documents ─────────────────────── */
+
+/** An organizer's PAN card or GST certificate, for the reviewing admin. */
+router.get(
+  '/kyc-documents/:id',
+  validate({ params: z.object({ id: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const document = await readKycDocument(req.params.id!, null);
+    // Identity documents: who looked, and when, is worth keeping.
+    await audit({
+      actorId: currentUser(req).id,
+      actorRole: 'admin',
+      action: 'kyc.document.viewed',
+      entityType: 'kyc_document',
+      entityId: req.params.id!,
+      ip: clientIp(req),
+    });
+    sendKycDocument(res, document);
   }),
 );
 

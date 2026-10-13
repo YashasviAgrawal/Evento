@@ -97,7 +97,7 @@ export const updateEventSchema = eventFieldsSchema
   });
 
 export const organizerEventListSchema = z.object({
-  status: z.enum(['draft', 'pending_review', 'published', 'rejected', 'paused', 'completed', 'cancelled']).optional(),
+  status: z.enum(['draft', 'pending_review', 'published', 'rejected', 'paused', 'completed', 'cancelled', 'archived']).optional(),
   q: z.string().trim().max(120).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
