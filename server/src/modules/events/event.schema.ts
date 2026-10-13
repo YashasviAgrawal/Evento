@@ -6,6 +6,7 @@ export const eventListQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
   city: z.string().trim().max(80).optional(),
   category: z.string().trim().max(80).optional(),
+  subcategory: z.string().trim().max(80).optional(),
   /** Quick filters from the PRD: Today / Tomorrow / This Weekend. */
   when: z.enum(['today', 'tomorrow', 'weekend', 'this_week', 'this_month']).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -49,6 +50,8 @@ export const eventFieldsSchema = z
     subtitle: z.string().trim().max(200).optional().nullable(),
     description: z.string().trim().max(20_000).default(''),
     categoryId: z.string().uuid('Choose a category'),
+    /** Optional; must belong to `categoryId`. null clears it on update. */
+    subcategoryId: z.string().uuid().nullable().optional(),
     venueId: z.string().uuid().optional(),
     venue: z
       .object({

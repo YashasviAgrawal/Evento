@@ -56,13 +56,18 @@ export function EventFilters({
       } else {
         params.set(key, value);
       }
+      // A subcategory belongs to one category, so it cannot outlive a category change.
+      if (key === 'category') params.delete('subcategory');
       params.delete('page');
       router.push(`${pathname}?${params.toString()}`, { scroll: false });
     },
     [pathname, router, searchParams],
   );
 
-  const activeFilters = ['q', 'city', 'category', 'when', 'price', 'featured'].filter((key) => searchParams.get(key));
+  const activeFilters = ['q', 'city', 'category', 'subcategory', 'when', 'price', 'featured'].filter((key) =>
+    searchParams.get(key),
+  );
+  const subcategories = categories.find((category) => category.slug === searchParams.get('category'))?.subcategories ?? [];
 
   const filterBody = (
     <div className="space-y-6">
@@ -107,6 +112,22 @@ export function EventFilters({
           ))}
         </div>
       </FilterGroup>
+
+      {subcategories.length > 0 && (
+        <FilterGroup title="Type">
+          <div className="flex flex-wrap gap-2">
+            {subcategories.map((subcategory) => (
+              <Chip
+                key={subcategory.id}
+                active={searchParams.get('subcategory') === subcategory.slug}
+                onClick={() => setParam('subcategory', subcategory.slug)}
+              >
+                {subcategory.name}
+              </Chip>
+            ))}
+          </div>
+        </FilterGroup>
+      )}
 
       <FilterGroup title="City">
         <CityPicker

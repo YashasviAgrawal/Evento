@@ -61,6 +61,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
     q: first(params.q),
     city: first(params.city),
     category: first(params.category),
+    subcategory: first(params.subcategory),
     when: first(params.when),
     date: first(params.date),
     price: first(params.price),

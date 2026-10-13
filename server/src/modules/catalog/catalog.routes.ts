@@ -209,7 +209,11 @@ router.get(
       const { rows } = await query(
         `SELECT c.id, c.name, c.slug, c.icon, c.color, c.description, c.image_url,
                 (SELECT count(*)::int FROM events e
-                  WHERE e.category_id = c.id AND e.status = 'published' AND e.ends_at > now()) AS event_count
+                  WHERE e.category_id = c.id AND e.status = 'published' AND e.ends_at > now()) AS event_count,
+                COALESCE((SELECT json_agg(json_build_object('id', s.id, 'name', s.name, 'slug', s.slug)
+                                          ORDER BY s.display_order, s.name)
+                            FROM subcategories s
+                           WHERE s.category_id = c.id AND s.is_active = true), '[]'::json) AS subcategories
            FROM categories c
           WHERE c.is_active = true
           ORDER BY c.display_order ASC`,
@@ -228,6 +232,7 @@ router.get(
         description: row.description,
         imageUrl: row.image_url,
         eventCount: row.event_count,
+        subcategories: row.subcategories,
       })),
     );
   }),

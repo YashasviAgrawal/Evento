@@ -146,6 +146,15 @@ export async function listPublicEvents(
     filters.where(isUuid(params.category) ? `c.id = ${value}::uuid` : `c.slug = ${value}`);
   }
 
+  if (params.subcategory) {
+    const value = filters.add(params.subcategory);
+    filters.where(
+      isUuid(params.subcategory)
+        ? `e.subcategory_id = ${value}::uuid`
+        : `e.subcategory_id IN (SELECT id FROM subcategories WHERE slug = ${value})`,
+    );
+  }
+
   if (params.organizer) {
     const value = filters.add(params.organizer);
     filters.where(isUuid(params.organizer) ? `o.id = ${value}::uuid` : `o.slug = ${value}`);
@@ -283,6 +292,7 @@ export async function getEventBySlugOrId(identifier: string, viewer?: Authentica
   const row = await queryOne<Record<string, unknown>>(
     `SELECT e.*,
             c.name AS category_name, c.slug AS category_slug, c.color AS category_color, c.icon AS category_icon,
+            sc.name AS subcategory_name, sc.slug AS subcategory_slug,
             ci.name AS city_name, ci.slug AS city_slug, ci.state AS city_state,
             v.name AS venue_name, v.address_line1, v.address_line2, v.landmark, v.postal_code,
             v.latitude, v.longitude, v.google_maps_url, v.capacity AS venue_capacity,
@@ -291,6 +301,7 @@ export async function getEventBySlugOrId(identifier: string, viewer?: Authentica
             o.website AS organizer_website, o.status AS organizer_status, o.user_id AS organizer_user_id
        FROM events e
        JOIN categories c  ON c.id  = e.category_id
+       LEFT JOIN subcategories sc ON sc.id = e.subcategory_id
        JOIN cities     ci ON ci.id = e.city_id
        JOIN venues     v  ON v.id  = e.venue_id
        JOIN organizers o  ON o.id  = e.organizer_id
@@ -345,6 +356,9 @@ export async function getEventBySlugOrId(identifier: string, viewer?: Authentica
       color: row.category_color,
       icon: row.category_icon,
     },
+    subcategory: row.subcategory_id
+      ? { id: row.subcategory_id, name: row.subcategory_name, slug: row.subcategory_slug }
+      : null,
     city: { id: row.city_id, name: row.city_name, slug: row.city_slug, state: row.city_state },
     venue: {
       id: row.venue_id,
@@ -472,10 +486,20 @@ async function resolveVenue(
   return null;
 }
 
+/** Reject a subcategory that does not belong to the event's category. */
+async function assertSubcategoryMatches(client: PoolClient, subcategoryId: string, categoryId: string): Promise<void> {
+  const { rows } = await client.query('SELECT 1 FROM subcategories WHERE id = $1 AND category_id = $2', [
+    subcategoryId,
+    categoryId,
+  ]);
+  if (!rows[0]) throw new BadRequestError('That subcategory does not belong to the chosen category', 'INVALID_SUBCATEGORY');
+}
+
 export async function createEvent(organizerId: string, input: CreateEventInput): Promise<{ id: string; slug: string }> {
   return withTransaction(async (client) => {
     const venue = await resolveVenue(client, organizerId, input);
     if (!venue) throw new BadRequestError('A venue is required', 'VENUE_REQUIRED');
+    if (input.subcategoryId) await assertSubcategoryMatches(client, input.subcategoryId, input.categoryId);
 
     const slug = uniqueSlug(input.title);
     const durationMinutes = Math.round(
@@ -485,8 +509,8 @@ export async function createEvent(organizerId: string, input: CreateEventInput):
     const { rows } = await client.query<{ id: string; slug: string }>(
       `INSERT INTO events (organizer_id, title, slug, subtitle, description, category_id, venue_id, city_id,
                            banner_url, thumbnail_url, gallery, starts_at, ends_at, doors_open_at, language,
-                           duration_minutes, age_limit, terms, tags, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,'draft')
+                           duration_minutes, age_limit, terms, tags, subcategory_id, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20,'draft')
        RETURNING id, slug`,
       [
         organizerId,
@@ -508,6 +532,7 @@ export async function createEvent(organizerId: string, input: CreateEventInput):
         input.ageLimit ?? null,
         input.terms ?? null,
         input.tags ?? [],
+        input.subcategoryId ?? null,
       ],
     );
     const event = rows[0]!;
@@ -541,6 +566,13 @@ export async function assertEventOwnership(
 export async function updateEvent(eventId: string, organizerId: string, input: UpdateEventInput): Promise<void> {
   await withTransaction(async (client) => {
     const venue = await resolveVenue(client, organizerId, input);
+    if (input.subcategoryId) {
+      const categoryId =
+        input.categoryId ??
+        (await client.query<{ category_id: string }>('SELECT category_id FROM events WHERE id = $1', [eventId])).rows[0]!
+          .category_id;
+      await assertSubcategoryMatches(client, input.subcategoryId, categoryId);
+    }
 
     await client.query(
       `UPDATE events SET
@@ -559,7 +591,8 @@ export async function updateEvent(eventId: string, organizerId: string, input: U
          language      = COALESCE($14, language),
          age_limit     = COALESCE($15, age_limit),
          terms         = COALESCE($16, terms),
-         tags          = COALESCE($17, tags)
+         tags          = COALESCE($17, tags),
+         subcategory_id = CASE WHEN $18::boolean THEN $19::uuid ELSE subcategory_id END
        WHERE id = $1`,
       [
         eventId,
@@ -579,7 +612,17 @@ export async function updateEvent(eventId: string, organizerId: string, input: U
         input.ageLimit ?? null,
         input.terms ?? null,
         input.tags ?? null,
+        input.subcategoryId !== undefined,
+        input.subcategoryId ?? null,
       ],
+    );
+
+    // A category change without a new subcategory must not leave a stale one behind.
+    await client.query(
+      `UPDATE events e SET subcategory_id = NULL
+        WHERE e.id = $1 AND e.subcategory_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM subcategories s WHERE s.id = e.subcategory_id AND s.category_id = e.category_id)`,
+      [eventId],
     );
 
     await client.query(

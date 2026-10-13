@@ -77,6 +77,11 @@ export function EventDetailView({ event, relatedEvents }: { event: EventDetail; 
         <header className="mb-8">
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{event.category.name}</Badge>
+            {event.subcategory && (
+              <Link href={`/events?category=${event.category.slug}&subcategory=${event.subcategory.slug}`}>
+                <Badge className="transition hover:bg-ink-200">{event.subcategory.name}</Badge>
+              </Link>
+            )}
             {event.isFeatured && <span className="badge bg-brand-600 text-white ring-brand-500">Featured</span>}
             {event.status !== 'published' && <StatusBadge status={event.status} />}
           </div>

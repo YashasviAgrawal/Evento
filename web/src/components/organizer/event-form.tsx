@@ -8,6 +8,7 @@ import type { Category, City } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Alert, Field, Input, Select, Textarea } from '@/components/ui/index';
 import { CityPicker } from '@/components/ui/city-picker';
+import { DateInput } from '@/components/ui/date-input';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/format';
 
@@ -66,6 +67,7 @@ export function EventForm({ eventId }: { eventId?: string }) {
     subtitle: '',
     description: '',
     categoryId: '',
+    subcategoryId: '',
     startsAt: '',
     endsAt: '',
     language: 'English',
@@ -101,6 +103,7 @@ export function EventForm({ eventId }: { eventId?: string }) {
             subtitle: string | null;
             description: string;
             category: { id: string };
+            subcategory?: { id: string } | null;
             startsAt: string;
             endsAt: string;
             language: string;
@@ -117,6 +120,7 @@ export function EventForm({ eventId }: { eventId?: string }) {
             subtitle: event.subtitle ?? '',
             description: event.description,
             categoryId: event.category.id,
+            subcategoryId: event.subcategory?.id ?? '',
             // datetime-local wants "YYYY-MM-DDTHH:mm" in local time.
             startsAt: toLocalInput(event.startsAt),
             endsAt: toLocalInput(event.endsAt),
@@ -207,6 +211,7 @@ export function EventForm({ eventId }: { eventId?: string }) {
       subtitle: form.subtitle.trim() || undefined,
       description: form.description.trim(),
       categoryId: form.categoryId,
+      subcategoryId: form.subcategoryId || null,
       startsAt: toIso(form.startsAt),
       endsAt: toIso(form.endsAt),
       language: form.language,
@@ -260,6 +265,8 @@ export function EventForm({ eventId }: { eventId?: string }) {
     }
   }
 
+  const subcategories = categories.find((category) => category.id === form.categoryId)?.subcategories ?? [];
+
   if (loading) {
     return <div className="h-96 animate-pulse rounded-xl bg-white" />;
   }
@@ -294,7 +301,8 @@ export function EventForm({ eventId }: { eventId?: string }) {
         <Field label="Category" required error={errors.categoryId}>
           <Select
             value={form.categoryId}
-            onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+            // A subcategory only makes sense within its own category.
+            onChange={(e) => setForm({ ...form, categoryId: e.target.value, subcategoryId: '' })}
             invalid={Boolean(errors.categoryId)}
           >
             <option value="">Choose a category…</option>
@@ -305,6 +313,22 @@ export function EventForm({ eventId }: { eventId?: string }) {
             ))}
           </Select>
         </Field>
+
+        {subcategories.length > 0 && (
+          <Field label="Subcategory" hint="Optional — helps people find the right kind of event">
+            <Select
+              value={form.subcategoryId}
+              onChange={(e) => setForm({ ...form, subcategoryId: e.target.value })}
+            >
+              <option value="">Choose a subcategory…</option>
+              {subcategories.map((subcategory) => (
+                <option key={subcategory.id} value={subcategory.id}>
+                  {subcategory.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         <Field label="Language">
           <Input value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} />
@@ -388,19 +412,19 @@ export function EventForm({ eventId }: { eventId?: string }) {
       {/* ── Schedule ── */}
       <Section title="Date & time" description="When does it start and finish?">
         <Field label="Starts at" required error={errors.startsAt}>
-          <Input
+          <DateInput
             type="datetime-local"
             value={form.startsAt}
-            onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
+            onChange={(startsAt) => setForm({ ...form, startsAt })}
             invalid={Boolean(errors.startsAt)}
           />
         </Field>
 
         <Field label="Ends at" required error={errors.endsAt}>
-          <Input
+          <DateInput
             type="datetime-local"
             value={form.endsAt}
-            onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
+            onChange={(endsAt) => setForm({ ...form, endsAt })}
             invalid={Boolean(errors.endsAt)}
           />
         </Field>

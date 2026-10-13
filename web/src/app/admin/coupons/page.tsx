@@ -6,6 +6,7 @@ import { api, ApiError, type PageMeta } from '@/lib/api';
 import { PageHeader } from '@/components/dashboard/shell';
 import { Button } from '@/components/ui/button';
 import { Alert, EmptyState, Field, Input, Select, Skeleton, StatusBadge, Textarea } from '@/components/ui/index';
+import { DateInput } from '@/components/ui/date-input';
 import { useToast } from '@/components/ui/toast';
 import { cn, formatDateTime, formatMoney, formatNumber } from '@/lib/format';
 
@@ -490,10 +491,11 @@ function CouponForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => 
         </Field>
 
         <Field label="Valid until" hint="Blank for no expiry">
-          <Input
+          <DateInput
             type="datetime-local"
+            clearable
             value={form.validUntil}
-            onChange={(e) => setForm({ ...form, validUntil: e.target.value })}
+            onChange={(validUntil) => setForm({ ...form, validUntil })}
           />
         </Field>
 

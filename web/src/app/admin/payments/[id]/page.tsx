@@ -27,6 +27,7 @@ import { KycDocumentPreview } from '@/components/kyc/kyc-document';
 import { PageHeader, StatCard } from '@/components/dashboard/shell';
 import { Button } from '@/components/ui/button';
 import { Alert, DetailRow, Field, Input, Select, Skeleton, StatusBadge, Textarea } from '@/components/ui/index';
+import { DateInput } from '@/components/ui/date-input';
 import { useToast } from '@/components/ui/toast';
 import { cn, formatDateTime, formatEventDate, formatMoney, formatNumber } from '@/lib/format';
 
@@ -832,18 +833,18 @@ function RecordPayoutForm({
         </Field>
 
         <Field label="Period from" hint="Optional — the settlement window">
-          <Input
-            type="date"
+          <DateInput
+            clearable
             value={form.periodStart}
-            onChange={(e) => setForm({ ...form, periodStart: e.target.value })}
+            onChange={(periodStart) => setForm({ ...form, periodStart })}
           />
         </Field>
 
         <Field label="Period to">
-          <Input
-            type="date"
+          <DateInput
+            clearable
             value={form.periodEnd}
-            onChange={(e) => setForm({ ...form, periodEnd: e.target.value })}
+            onChange={(periodEnd) => setForm({ ...form, periodEnd })}
           />
         </Field>
 

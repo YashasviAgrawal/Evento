@@ -25,6 +25,13 @@ export interface Category {
   imageUrl?: string | null;
   description?: string | null;
   eventCount?: number;
+  subcategories?: Subcategory[];
+}
+
+export interface Subcategory {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 export interface City {
@@ -107,6 +114,7 @@ export interface EventDetail {
   viewCount: number;
   rejectionReason: string | null;
   category: { id: string; name: string; slug: string; color: string; icon: string | null };
+  subcategory?: Subcategory | null;
   city: { id: string; name: string; slug: string; state: string };
   venue: {
     id: string;
