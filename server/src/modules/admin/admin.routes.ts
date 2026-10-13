@@ -14,6 +14,7 @@ import { env } from '../../config/env';
 import * as reportService from '../reports/report.service';
 import * as payoutService from '../payouts/payout.service';
 import * as kycService from '../payouts/kyc.service';
+import { readKycDocument, sendKycDocument } from '../payouts/kyc-documents.service';
 import { processRefund } from '../payments/payment.service';
 import { cancelEvent } from '../events/event.service';
 import { invalidateCache } from '../../utils/cache';
@@ -356,6 +357,27 @@ router.post(
       ip: clientIp(req),
     });
     return ok(res, { status: rows[0]!.status });
+  }),
+);
+
+/* ─────────────────────── KYC documents ─────────────────────── */
+
+/** An organizer's PAN card or GST certificate, for the reviewing admin. */
+router.get(
+  '/kyc-documents/:id',
+  validate({ params: z.object({ id: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const document = await readKycDocument(req.params.id!, null);
+    // Identity documents: who looked, and when, is worth keeping.
+    await audit({
+      actorId: currentUser(req).id,
+      actorRole: 'admin',
+      action: 'kyc.document.viewed',
+      entityType: 'kyc_document',
+      entityId: req.params.id!,
+      ip: clientIp(req),
+    });
+    sendKycDocument(res, document);
   }),
 );
 

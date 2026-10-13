@@ -506,6 +506,26 @@ export interface KycRecord {
   ifsc: string;
   bankName: string | null;
   submittedAt: string;
+  panDocument: KycDocument | null;
+  gstDocument: KycDocument | null;
+  checks: KycChecks;
+}
+
+/** A PAN card or GST certificate. Private: fetched through the API, never by URL. */
+export interface KycDocument {
+  id: string;
+  kind: 'pan' | 'gst';
+  mimeType: string;
+  sizeBytes: number;
+  originalName: string | null;
+  uploadedAt: string;
+}
+
+/** Hints the server derives from the numbers themselves, for the reviewing admin. */
+export interface KycChecks {
+  panHolderType: string | null;
+  gstinPan: string | null;
+  gstinMatchesPan: boolean | null;
 }
 
 export interface KycState {

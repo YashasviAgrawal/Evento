@@ -3,11 +3,14 @@
 import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
+  AlertTriangle,
   ArrowLeft,
   BadgeCheck,
   Building2,
   Check,
+  CheckCircle2,
   Download,
+  FileCheck2,
   IndianRupee,
   Landmark,
   Percent,
@@ -19,7 +22,8 @@ import {
   X,
 } from 'lucide-react';
 import { api, ApiError, downloadFile } from '@/lib/api';
-import type { AdminOrganizerPayments, PayoutRecord } from '@/lib/types';
+import type { AdminOrganizerPayments, KycDocument, PayoutRecord } from '@/lib/types';
+import { KycDocumentPreview } from '@/components/kyc/kyc-document';
 import { PageHeader, StatCard } from '@/components/dashboard/shell';
 import { Button } from '@/components/ui/button';
 import { Alert, DetailRow, Field, Input, Select, Skeleton, StatusBadge, Textarea } from '@/components/ui/index';
@@ -581,7 +585,110 @@ function KycPanel({
           </dl>
         </div>
       </div>
+
+      <KycDocumentsReview record={record} />
     </section>
+  );
+}
+
+/**
+ * The documents next to the numbers typed against them, so the admin can
+ * confirm the PAN and GSTIN on the page are the ones on the card before
+ * approving — plus what the numbers themselves reveal.
+ */
+function KycDocumentsReview({ record }: { record: NonNullable<AdminOrganizerPayments['kyc']['kyc']> }) {
+  const { checks } = record;
+
+  return (
+    <div className="mt-6 border-t border-ink-100 pt-5">
+      <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">
+        <FileCheck2 className="h-3.5 w-3.5" />
+        Documents — check they match the details above
+      </p>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <DocumentColumn
+          title="PAN card"
+          expected={[
+            ['Name', record.legalName],
+            ['PAN', record.pan],
+          ]}
+          document={record.panDocument}
+          missing="No PAN card uploaded. This submission predates document upload, or was never completed — decline it and ask for the card."
+        />
+        {record.gstin ? (
+          <DocumentColumn
+            title="GST certificate"
+            expected={[
+              ['Business', record.businessName],
+              ['GSTIN', record.gstin],
+            ]}
+            document={record.gstDocument}
+            missing="No GST certificate uploaded — decline it and ask for Form GST REG-06."
+          />
+        ) : (
+          <div className="rounded-lg border border-dashed border-ink-200 p-4 text-sm text-ink-500">
+            Not GST registered, so there is no certificate to check.
+          </div>
+        )}
+      </div>
+
+      <ul className="mt-4 space-y-1.5 text-sm">
+        {checks.panHolderType && (
+          <li className="text-ink-600">
+            PAN is issued to: <span className="font-medium text-ink-900">{checks.panHolderType}</span>
+          </li>
+        )}
+        {checks.gstinMatchesPan === true && (
+          <li className="flex items-center gap-1.5 text-emerald-700">
+            <CheckCircle2 className="h-4 w-4" />
+            The GSTIN is registered on this same PAN.
+          </li>
+        )}
+        {checks.gstinMatchesPan === false && (
+          <li className="flex items-start gap-1.5 text-amber-700">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              The GSTIN is registered on PAN <span className="font-mono">{checks.gstinPan}</span>, not{' '}
+              <span className="font-mono">{record.pan}</span>. Fine if the GST belongs to their company or firm —
+              otherwise ask why.
+            </span>
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function DocumentColumn({
+  title,
+  expected,
+  document,
+  missing,
+}: {
+  title: string;
+  expected: Array<[string, string]>;
+  document: KycDocument | null;
+  missing: string;
+}) {
+  return (
+    <div>
+      <p className="mb-1.5 text-sm font-semibold text-ink-900">{title}</p>
+      <p className="mb-2 text-xs text-ink-500">
+        Should show{' '}
+        {expected.map(([label, value], index) => (
+          <span key={label}>
+            {index > 0 && ' · '}
+            {label}: <span className="font-mono font-medium text-ink-800">{value}</span>
+          </span>
+        ))}
+      </p>
+      {document ? (
+        <KycDocumentPreview path={`/admin/kyc-documents/${document.id}`} document={document} className="h-56" />
+      ) : (
+        <Alert tone="error">{missing}</Alert>
+      )}
+    </div>
   );
 }
 

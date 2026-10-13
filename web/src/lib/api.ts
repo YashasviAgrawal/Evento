@@ -237,6 +237,41 @@ export async function fetchPublicPaged<T>(
   }
 }
 
+/**
+ * Fetch a private file (e.g. a KYC document) with the bearer token. An <img>
+ * cannot send the token itself, so callers turn this into an object URL.
+ */
+export async function fetchPrivateFile(path: string): Promise<Blob> {
+  const token = tokenStore.access;
+  const response = await fetch(buildUrl(path), {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  if (response.status === 401 && (await refreshAccessToken())) return fetchPrivateFile(path);
+  if (!response.ok) throw new ApiError(response.status, 'FILE_UNAVAILABLE', 'Could not load the file');
+  return response.blob();
+}
+
+/** Multipart upload with the bearer token; FormData must not carry a JSON content-type. */
+export async function uploadForm<T>(path: string, body: FormData): Promise<T> {
+  const send = () =>
+    fetch(buildUrl(path), {
+      method: 'POST',
+      headers: tokenStore.access ? { authorization: `Bearer ${tokenStore.access}` } : {},
+      body,
+      credentials: 'include',
+    });
+  let response = await send();
+  if (response.status === 401 && (await refreshAccessToken())) response = await send();
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success === false) {
+    const error = payload?.error ?? { code: 'UPLOAD_FAILED', message: 'Upload failed' };
+    throw new ApiError(response.status, error.code, error.message, error.details);
+  }
+  return payload.data as T;
+}
+
 /** Authenticated file download (CSV / PDF) that respects the bearer token. */
 export async function downloadFile(path: string, filename: string): Promise<void> {
   const token = tokenStore.access;

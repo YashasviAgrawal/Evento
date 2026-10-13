@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
+import { MulterError } from 'multer';
 import { ZodError } from 'zod';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
@@ -42,6 +43,8 @@ function friendlyDuplicateMessage(constraint?: string): string {
       return 'A coupon with this code already exists';
     case 'events_slug_key':
       return 'An event with this URL already exists';
+    case 'organizer_kyc_pan_unique':
+      return 'This PAN is already registered with another organizer account';
     default:
       return 'That record already exists';
   }
@@ -68,6 +71,11 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     appError = err;
   } else if (err instanceof ZodError) {
     appError = new ValidationError(err.issues.map((i) => ({ field: i.path.join('.'), message: i.message })));
+  } else if (err instanceof MulterError) {
+    appError =
+      err.code === 'LIMIT_FILE_SIZE'
+        ? new AppError(413, 'FILE_TOO_LARGE', 'That file is too large')
+        : new AppError(400, 'INVALID_UPLOAD', err.message);
   } else if (err && typeof err === 'object' && 'code' in err) {
     appError =
       translatePostgresError(err as { code?: string; constraint?: string }) ??
