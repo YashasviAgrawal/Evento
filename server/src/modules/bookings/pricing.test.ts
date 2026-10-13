@@ -44,6 +44,14 @@ describe('calculatePricing', () => {
     expect(result.organizerPayoutPaise).toBe(180_000);
   });
 
+  it('rounds the convenience fee to the nearest whole rupee', () => {
+    // 2.5% of ₹150 is ₹3.75, charged as ₹4.
+    const result = calculatePricing([line(150, 1)], 0, { ...RATES, convenienceFeePercent: 2.5 });
+
+    expect(result.convenienceFeePaise).toBe(400);
+    expect(result.totalPaise).toBe(15_000 + 2_700 + 400); // ₹150 + 18% GST ₹27 + ₹4
+  });
+
   it('caps the discount at the order value, leaving nothing owed', () => {
     const result = calculatePricing([line(500, 1)], 999_999, RATES);
     expect(result.discountPaise).toBe(50_000);

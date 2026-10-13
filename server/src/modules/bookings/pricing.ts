@@ -56,7 +56,8 @@ export function calculatePricing(
   const taxablePaise = subtotalPaise - cappedDiscount;
 
   const taxPaise = percentOf(taxablePaise, rates.taxPercent);
-  const convenienceFeePaise = percentOf(taxablePaise, rates.convenienceFeePercent);
+  // Rounded to the nearest whole rupee so the customer sees ₹4, not ₹3.75.
+  const convenienceFeePaise = Math.round(percentOf(taxablePaise, rates.convenienceFeePercent) / 100) * 100;
   const totalPaise = taxablePaise + taxPaise + convenienceFeePaise;
 
   /*
