@@ -15,11 +15,13 @@ export function formatMoney(paise: number, options: { compact?: boolean; withDec
   if (options.compact && rupees >= 1000) {
     return `₹${(rupees / 1000).toFixed(rupees >= 10000 ? 0 : 1)}K`;
   }
+  // Never hide paise: rounding ₹3.75 to ₹4 makes the rows disagree with the total.
+  const showDecimals = options.withDecimals || paise % 100 !== 0;
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    minimumFractionDigits: options.withDecimals ? 2 : 0,
-    maximumFractionDigits: options.withDecimals ? 2 : 0,
+    minimumFractionDigits: showDecimals ? 2 : 0,
+    maximumFractionDigits: showDecimals ? 2 : 0,
   }).format(rupees);
 }
 
