@@ -31,44 +31,36 @@ export function EventDetailView({ event, relatedEvents }: { event: EventDetail; 
 
   return (
     <>
-      {/* ── Banner ── */}
-      <div className="relative h-64 w-full overflow-hidden bg-ink-900 sm:h-80 lg:h-[26rem]">
-        {event.bannerUrl && (
-          <Image src={event.bannerUrl} alt={event.title} fill priority sizes="100vw" className="object-cover" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/60 to-ink-950/20" />
-
-        <div className="container-page absolute inset-x-0 bottom-0 pb-7">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="badge bg-white/95 text-ink-900 ring-white/30">{event.category.name}</span>
-            {event.isFeatured && <span className="badge bg-brand-600 text-white ring-brand-500">Featured</span>}
-            {event.status !== 'published' && <StatusBadge status={event.status} />}
-          </div>
-
-          <h1 className="mt-3 max-w-3xl text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
-            {event.title}
-          </h1>
-          {event.subtitle && <p className="mt-2 max-w-2xl text-sm text-ink-200 sm:text-base">{event.subtitle}</p>}
-
-          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink-200">
-            <span className="flex items-center gap-1.5">
-              <CalendarDays className="h-4 w-4" aria-hidden />
-              {formatEventDate(event.startsAt)}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Clock className="h-4 w-4" aria-hidden />
-              {formatEventTime(event.startsAt)}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <MapPin className="h-4 w-4" aria-hidden />
-              {event.venue.name}, {event.city.name}
-            </span>
+      {/* ── Banner ──
+          The image keeps its own shape and is never cropped: a wide banner
+          fills the width, a tall poster is height-capped and centred. Any
+          leftover space shows a dimmed copy of the same image behind it. */}
+      {event.bannerUrl && (
+        <div className="container-page pt-3 sm:pt-6">
+          <div className="relative overflow-hidden rounded-xl bg-ink-950 sm:rounded-2xl">
+            <Image
+              src={event.bannerUrl}
+              alt=""
+              aria-hidden
+              fill
+              sizes="100vw"
+              className="scale-105 object-cover blur-sm brightness-[0.35]"
+            />
+            <Image
+              src={event.bannerUrl}
+              alt={event.title}
+              width={0}
+              height={0}
+              priority
+              sizes="(min-width: 1280px) 1200px, 100vw"
+              className="relative h-auto max-h-[75vh] w-full object-contain lg:max-h-[28rem]"
+            />
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="container-page py-8 lg:py-10">
-        <nav aria-label="Breadcrumb" className="mb-6 text-sm text-ink-500">
+      <div className="container-page py-6 lg:py-8">
+        <nav aria-label="Breadcrumb" className="mb-4 text-sm text-ink-500">
           <Link href="/" className="hover:text-ink-800">
             Home
           </Link>
@@ -81,6 +73,34 @@ export function EventDetailView({ event, relatedEvents }: { event: EventDetail; 
             {event.category.name}
           </Link>
         </nav>
+
+        <header className="mb-8">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge>{event.category.name}</Badge>
+            {event.isFeatured && <span className="badge bg-brand-600 text-white ring-brand-500">Featured</span>}
+            {event.status !== 'published' && <StatusBadge status={event.status} />}
+          </div>
+
+          <h1 className="mt-3 max-w-3xl text-2xl font-extrabold leading-tight tracking-tight text-ink-900 sm:text-4xl">
+            {event.title}
+          </h1>
+          {event.subtitle && <p className="mt-2 max-w-2xl text-sm text-ink-600 sm:text-base">{event.subtitle}</p>}
+
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink-600">
+            <span className="flex items-center gap-1.5">
+              <CalendarDays className="h-4 w-4 text-brand-600" aria-hidden />
+              {formatEventDate(event.startsAt)}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-brand-600" aria-hidden />
+              {formatEventTime(event.startsAt)}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <MapPin className="h-4 w-4 text-brand-600" aria-hidden />
+              {event.venue.name}, {event.city.name}
+            </span>
+          </div>
+        </header>
 
         <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
           {/* ── Main column ── */}
