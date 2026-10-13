@@ -40,6 +40,22 @@ export const authLimiter = build({
   },
 });
 
+/**
+ * CMS sign-in. Tighter than `authLimiter` and on its own budget: the CMS has no
+ * self-service signup, so there is no legitimate reason for many attempts, and
+ * sharing a bucket with the storefront would let ordinary shopper traffic eat
+ * the allowance (or vice versa) for the same address.
+ */
+export const cmsAuthLimiter = build({
+  windowMs: 15 * 60_000,
+  limit: 10,
+  message: 'Too many sign-in attempts. Try again in a few minutes.',
+  keyGenerator: (req: Request) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase() : '';
+    return email ? `cms-auth:${email}` : `cms-auth-ip:${req.ip}`;
+  },
+});
+
 /** OTP requests are the most abusable endpoint — they cost us money to send. */
 export const otpLimiter = build({
   windowMs: 10 * 60_000,

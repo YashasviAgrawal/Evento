@@ -12,6 +12,8 @@ export interface BlogCategorySummary {
   name: string;
   slug: string;
   description: string | null;
+  /** Lower sorts first in the category navigation. */
+  displayOrder: number;
   postCount: number;
 }
 
@@ -79,7 +81,7 @@ function toCard(row: any): BlogPostCard {
 export async function listCategories(): Promise<BlogCategorySummary[]> {
   const rows = await cached('blog:categories', 300_000, async () => {
     const { rows } = await query(
-      `SELECT c.id, c.name, c.slug, c.description,
+      `SELECT c.id, c.name, c.slug, c.description, c.display_order,
               (SELECT count(*)::int FROM blog_posts p
                 WHERE p.category_id = c.id AND p.status = 'published') AS post_count
          FROM blog_categories c
@@ -93,6 +95,7 @@ export async function listCategories(): Promise<BlogCategorySummary[]> {
     name: row.name,
     slug: row.slug,
     description: row.description,
+    displayOrder: row.display_order,
     postCount: row.post_count,
   }));
 }
@@ -324,7 +327,17 @@ async function assertSlugFree(slug: string, exceptId?: string): Promise<void> {
   if (clash) throw new ConflictError(`The slug "${slug}" is already used by another article`, 'SLUG_TAKEN');
 }
 
-export async function createPost(input: CreateBlogPostInput, authorId: string | null) {
+/**
+ * `authorId` is a platform user (the admin console); `cmsAuthorId` is a CMS
+ * account (the CMS at /cms). Exactly one is set depending on which surface the
+ * post was written from — they are separate account spaces, so there is no
+ * single column that could hold both.
+ */
+export async function createPost(
+  input: CreateBlogPostInput,
+  authorId: string | null,
+  cmsAuthorId: string | null = null,
+) {
   const slug = input.slug ?? slugify(input.title);
   if (!slug) throw new ConflictError('Could not derive a URL slug from that title', 'SLUG_INVALID');
   await assertSlugFree(slug);
@@ -338,8 +351,8 @@ export async function createPost(input: CreateBlogPostInput, authorId: string | 
     `INSERT INTO blog_posts (
        title, slug, excerpt, content, category_id, cover_image_url, cover_image_alt,
        author_name, author_id, status, is_featured, tags, meta_title, meta_description,
-       canonical_url, og_image_url, focus_keyword, faq, published_at
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,coalesce($8,'Tixit Editorial'),$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19)
+       canonical_url, og_image_url, focus_keyword, faq, published_at, cms_author_id
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,coalesce($8,'Tixit Editorial'),$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19,$20)
      RETURNING id`,
     [
       input.title,
@@ -361,6 +374,7 @@ export async function createPost(input: CreateBlogPostInput, authorId: string | 
       input.focusKeyword ?? null,
       JSON.stringify(input.faq),
       publishedAt,
+      cmsAuthorId,
     ],
   );
 
@@ -428,4 +442,136 @@ export async function deletePost(id: string): Promise<void> {
   const { rowCount } = await query('DELETE FROM blog_posts WHERE id = $1', [id]);
   if (!rowCount) throw new NotFoundError('Article');
   invalidateCache('blog:');
+}
+
+/* ───────────────────── category administration ───────────────────── */
+
+async function assertCategorySlugFree(slug: string, exceptId?: string): Promise<void> {
+  const clash = await queryOne<{ id: string }>(
+    `SELECT id FROM blog_categories WHERE slug = $1 AND ($2::uuid IS NULL OR id <> $2)`,
+    [slug, exceptId ?? null],
+  );
+  if (clash) throw new ConflictError(`The slug "${slug}" is already used by another category`, 'SLUG_TAKEN');
+}
+
+export async function getCategory(id: string): Promise<BlogCategorySummary> {
+  const row = await queryOne(
+    `SELECT c.id, c.name, c.slug, c.description, c.display_order,
+            (SELECT count(*)::int FROM blog_posts p
+              WHERE p.category_id = c.id AND p.status = 'published') AS post_count
+       FROM blog_categories c
+      WHERE c.id = $1`,
+    [id],
+  );
+  if (!row) throw new NotFoundError('Category');
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description,
+    displayOrder: row.display_order,
+    postCount: row.post_count,
+  };
+}
+
+export async function createCategory(input: {
+  name: string;
+  slug?: string;
+  description?: string | null;
+  displayOrder: number;
+}): Promise<BlogCategorySummary> {
+  const slug = input.slug ?? slugify(input.name);
+  if (!slug) throw new ConflictError('Could not derive a URL slug from that name', 'SLUG_INVALID');
+  await assertCategorySlugFree(slug);
+
+  const row = await queryOne<{ id: string }>(
+    `INSERT INTO blog_categories (name, slug, description, display_order)
+     VALUES ($1, $2, $3, $4) RETURNING id`,
+    [input.name, slug, input.description ?? null, input.displayOrder],
+  );
+
+  invalidateCache('blog:');
+  return getCategory(row!.id);
+}
+
+export async function updateCategory(
+  id: string,
+  input: { name?: string; slug?: string; description?: string | null; displayOrder?: number },
+): Promise<BlogCategorySummary> {
+  const existing = await getCategory(id);
+  if (input.slug && input.slug !== existing.slug) await assertCategorySlugFree(input.slug, id);
+
+  const sets: string[] = [];
+  const params: unknown[] = [];
+
+  const columns: Array<[keyof typeof input, string]> = [
+    ['name', 'name'],
+    ['slug', 'slug'],
+    ['description', 'description'],
+    ['displayOrder', 'display_order'],
+  ];
+
+  for (const [field, column] of columns) {
+    if (input[field] === undefined) continue;
+    params.push(input[field]);
+    sets.push(`${column} = $${params.length}`);
+  }
+
+  if (sets.length === 0) return existing;
+
+  params.push(id);
+  await query(`UPDATE blog_categories SET ${sets.join(', ')} WHERE id = $${params.length}`, params);
+
+  invalidateCache('blog:');
+  return getCategory(id);
+}
+
+/**
+ * Deleting a category does not delete its articles — the foreign key is ON
+ * DELETE SET NULL, so they become uncategorised and stay published. Removing a
+ * grouping should never silently unpublish the writing inside it.
+ */
+export async function deleteCategory(id: string): Promise<void> {
+  const { rowCount } = await query('DELETE FROM blog_categories WHERE id = $1', [id]);
+  if (!rowCount) throw new NotFoundError('Category');
+  invalidateCache('blog:');
+}
+
+/* ─────────────────────────── dashboard ─────────────────────────── */
+
+export interface BlogStats {
+  total: number;
+  published: number;
+  draft: number;
+  archived: number;
+  totalViews: number;
+  categories: number;
+}
+
+export async function getBlogStats(): Promise<BlogStats> {
+  const row = await queryOne<{
+    total: number;
+    published: number;
+    draft: number;
+    archived: number;
+    total_views: number;
+    categories: number;
+  }>(
+    `SELECT count(*)::int                                              AS total,
+            count(*) FILTER (WHERE status = 'published')::int          AS published,
+            count(*) FILTER (WHERE status = 'draft')::int              AS draft,
+            count(*) FILTER (WHERE status = 'archived')::int           AS archived,
+            coalesce(sum(view_count), 0)::int                          AS total_views,
+            (SELECT count(*)::int FROM blog_categories)                AS categories
+       FROM blog_posts`,
+  );
+
+  return {
+    total: row?.total ?? 0,
+    published: row?.published ?? 0,
+    draft: row?.draft ?? 0,
+    archived: row?.archived ?? 0,
+    totalViews: row?.total_views ?? 0,
+    categories: row?.categories ?? 0,
+  };
 }

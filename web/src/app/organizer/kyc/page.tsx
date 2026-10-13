@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BadgeCheck, Building2, Clock, Landmark, Lock, ShieldCheck, UserRound } from 'lucide-react';
+import { BadgeCheck, Building2, Clock, FileCheck2, Landmark, Lock, ShieldCheck, UserRound } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
-import type { KycState } from '@/lib/types';
+import type { KycDocument, KycState } from '@/lib/types';
+import { KycDocumentPreview, KycDocumentUpload } from '@/components/kyc/kyc-document';
 import { PageHeader } from '@/components/dashboard/shell';
 import { Button } from '@/components/ui/button';
 import { Alert, DetailRow, Field, Input, Skeleton, StatusBadge, Textarea } from '@/components/ui/index';
@@ -17,7 +18,8 @@ import { formatDateTime } from '@/lib/format';
  * selling tickets.
  *
  * It collects who they are (PAN), what the business is (GSTIN, registered
- * address) and where the money goes (account, IFSC, holder name). Validation
+ * address) and where the money goes (account, IFSC, holder name), plus the PAN
+ * card and GST certificate the admin checks those typed numbers against. Validation
  * mirrors the server's — the same formats are enforced again in the API and in
  * the database, because an unpayable account number is expensive to discover
  * at transfer time.
@@ -27,6 +29,17 @@ const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{2}[0-9A-Z]$/;
 const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const ACCOUNT_PATTERN = /^[0-9]{9,18}$/;
+const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/** Mirrors the server: the 15th character of a GSTIN is a check digit. */
+function isValidGstinChecksum(gstin: string): boolean {
+  let sum = 0;
+  for (let i = 0; i < 14; i += 1) {
+    const product = BASE36.indexOf(gstin[i]!) * (i % 2 === 0 ? 1 : 2);
+    sum += Math.floor(product / 36) + (product % 36);
+  }
+  return BASE36[(36 - (sum % 36)) % 36] === gstin[14];
+}
 
 interface FormState {
   legalName: string;
@@ -61,7 +74,9 @@ export default function OrganizerKycPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
+  const [panDocument, setPanDocument] = useState<KycDocument | null>(null);
+  const [gstDocument, setGstDocument] = useState<KycDocument | null>(null);
+  const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'panDocument' | 'gstDocument', string>>>({});
 
   useEffect(() => {
     async function load() {
@@ -81,6 +96,8 @@ export default function OrganizerKycPage() {
             ifsc: data.kyc.ifsc,
             bankName: data.kyc.bankName ?? '',
           });
+          setPanDocument(data.kyc.panDocument);
+          setGstDocument(data.kyc.gstDocument);
         }
       } catch {
         setState(null);
@@ -92,14 +109,19 @@ export default function OrganizerKycPage() {
   }, []);
 
   function validate(): boolean {
-    const next: Partial<Record<keyof FormState, string>> = {};
+    const next: Partial<Record<keyof FormState | 'panDocument' | 'gstDocument', string>> = {};
+    const gstin = form.gstin.trim();
 
     if (form.legalName.trim().length < 2) next.legalName = 'Enter your full name as printed on your PAN card';
     if (!PAN_PATTERN.test(form.pan.trim())) next.pan = 'PAN looks like AAAAA0000A';
     if (form.businessName.trim().length < 2) next.businessName = 'Enter your registered business or brand name';
-    if (form.gstin.trim() && !GSTIN_PATTERN.test(form.gstin.trim())) {
-      next.gstin = 'GSTIN is 15 characters, e.g. 22AAAAA0000A1Z5';
+    if (!panDocument) next.panDocument = 'Upload a photo or PDF of your PAN card';
+    if (gstin && !GSTIN_PATTERN.test(gstin)) {
+      next.gstin = 'GSTIN is 15 characters, e.g. 27AAPFU0939F1ZV';
+    } else if (gstin && !isValidGstinChecksum(gstin)) {
+      next.gstin = 'This GSTIN is not valid — please check it against your GST certificate';
     }
+    if (gstin && !gstDocument) next.gstDocument = 'Upload your GST registration certificate';
     if (form.businessAddress.trim().length < 10) next.businessAddress = 'Enter the full registered address';
     if (form.accountHolderName.trim().length < 2) next.accountHolderName = 'Enter the name on the bank account';
     if (!ACCOUNT_PATTERN.test(form.accountNumber.trim())) next.accountNumber = 'Account number is 9–18 digits';
@@ -128,6 +150,8 @@ export default function OrganizerKycPage() {
         accountNumber: form.accountNumber.trim(),
         ifsc: form.ifsc.trim().toUpperCase(),
         bankName: form.bankName.trim() || null,
+        panDocumentId: panDocument!.id,
+        gstDocumentId: form.gstin.trim() ? (gstDocument?.id ?? null) : null,
       });
       setState(data);
       toast.success('Submitted for verification', 'Our team reviews these, usually within a working day.');
@@ -181,6 +205,23 @@ export default function OrganizerKycPage() {
             <DetailRow label="IFSC" value={<span className="font-mono">{kyc.ifsc}</span>} />
             <DetailRow label="Bank" value={kyc.bankName ?? '—'} />
           </dl>
+
+          {(kyc.panDocument || kyc.gstDocument) && (
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              {kyc.panDocument && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-ink-500">PAN card</p>
+                  <KycDocumentPreview path={`/organizer/kyc/documents/${kyc.panDocument.id}`} document={kyc.panDocument} />
+                </div>
+              )}
+              {kyc.gstDocument && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-ink-500">GST certificate</p>
+                  <KycDocumentPreview path={`/organizer/kyc/documents/${kyc.gstDocument.id}`} document={kyc.gstDocument} />
+                </div>
+              )}
+            </div>
+          )}
         </section>
       </div>
     );
@@ -262,7 +303,7 @@ export default function OrganizerKycPage() {
               value={form.gstin}
               onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
               invalid={Boolean(errors.gstin)}
-              placeholder="22AAAAA0000A1Z5"
+              placeholder="27AAPFU0939F1ZV"
               maxLength={15}
               className="font-mono uppercase"
             />
@@ -274,6 +315,46 @@ export default function OrganizerKycPage() {
               onChange={(e) => setForm({ ...form, businessAddress: e.target.value })}
               rows={3}
               placeholder={'Unit 4, Nehru Place\nNew Delhi 110019'}
+            />
+          </Field>
+        </Section>
+
+        <Section
+          icon={<FileCheck2 className="h-4 w-4" />}
+          title="Documents"
+          hint="Our team checks the numbers above against these before approving. They are stored privately and only our verification team can see them."
+        >
+          <Field
+            label="PAN card"
+            required
+            error={errors.panDocument}
+            hint="A clear photo or scan where the name and PAN number are readable"
+          >
+            <KycDocumentUpload
+              kind="pan"
+              document={panDocument}
+              invalid={Boolean(errors.panDocument)}
+              onUploaded={(document) => {
+                setPanDocument(document);
+                setErrors((current) => ({ ...current, panDocument: undefined }));
+              }}
+            />
+          </Field>
+
+          <Field
+            label="GST registration certificate"
+            required={Boolean(form.gstin.trim())}
+            error={errors.gstDocument}
+            hint={form.gstin.trim() ? 'Form GST REG-06, downloadable from the GST portal' : 'Only needed if you entered a GST number'}
+          >
+            <KycDocumentUpload
+              kind="gst"
+              document={gstDocument}
+              invalid={Boolean(errors.gstDocument)}
+              onUploaded={(document) => {
+                setGstDocument(document);
+                setErrors((current) => ({ ...current, gstDocument: undefined }));
+              }}
             />
           </Field>
         </Section>

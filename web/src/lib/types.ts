@@ -506,6 +506,26 @@ export interface KycRecord {
   ifsc: string;
   bankName: string | null;
   submittedAt: string;
+  panDocument: KycDocument | null;
+  gstDocument: KycDocument | null;
+  checks: KycChecks;
+}
+
+/** A PAN card or GST certificate. Private: fetched through the API, never by URL. */
+export interface KycDocument {
+  id: string;
+  kind: 'pan' | 'gst';
+  mimeType: string;
+  sizeBytes: number;
+  originalName: string | null;
+  uploadedAt: string;
+}
+
+/** Hints the server derives from the numbers themselves, for the reviewing admin. */
+export interface KycChecks {
+  panHolderType: string | null;
+  gstinPan: string | null;
+  gstinMatchesPan: boolean | null;
 }
 
 export interface KycState {
@@ -657,6 +677,8 @@ export interface BlogCategory {
   name: string;
   slug: string;
   description: string | null;
+  /** Lower sorts first in the category navigation. */
+  displayOrder: number;
   postCount: number;
 }
 
@@ -700,6 +722,43 @@ export interface BlogPostDetail extends BlogPostCard {
 /** What the admin editor reads and writes; adds the fields drafts need. */
 export interface AdminBlogPost extends BlogPostDetail {
   categoryId: string | null;
+}
+
+/* ──────────────────────────────── cms ──────────────────────────────── */
+
+/**
+ * A CMS account is not a platform `User`. They live in separate tables with
+ * separate sessions, so nothing here overlaps with the `User` type above.
+ */
+export type CmsRole = 'admin' | 'editor';
+
+export interface CmsUser {
+  id: string;
+  fullName: string;
+  email: string;
+  role: CmsRole;
+  status: 'active' | 'suspended';
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface CmsStats {
+  total: number;
+  published: number;
+  draft: number;
+  archived: number;
+  totalViews: number;
+  categories: number;
+}
+
+export interface CmsActivity {
+  id: string;
+  actorEmail: string | null;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  summary: string | null;
+  createdAt: string;
 }
 
 export interface PlatformSettings {

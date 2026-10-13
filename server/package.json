@@ -12,6 +12,7 @@
     "migrate": "tsx src/db/migrate.ts up",
     "migrate:status": "tsx src/db/migrate.ts status",
     "seed": "tsx src/db/seed.ts",
+    "cms:user": "tsx src/db/create-cms-user.ts",
     "db:reset": "tsx src/db/migrate.ts reset && tsx src/db/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest"

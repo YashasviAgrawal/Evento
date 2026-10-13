@@ -20,6 +20,7 @@ import organizerRoutes from './modules/organizer/organizer.routes';
 import organizerCouponRoutes from './modules/coupons/organizer-coupon.routes';
 import adminRoutes from './modules/admin/admin.routes';
 import { adminBlogRoutes, publicBlogRoutes } from './modules/blog/blog.routes';
+import cmsRoutes from './modules/cms/cms.routes';
 import uploadRoutes, { uploadDir } from './modules/uploads/upload.routes';
 
 export function createApp(): Express {
@@ -140,6 +141,9 @@ export function createApp(): Express {
   // 404 on an unknown /blog path inside its own router.
   api.use('/admin/blog', adminBlogRoutes);
   api.use('/admin', adminRoutes);
+  // The CMS authenticates against its own account table with its own signing
+  // key, so it mounts as a peer of /admin rather than underneath it.
+  api.use('/cms', cmsRoutes);
   api.use('/uploads', uploadRoutes);
 
   api.get('/', (_req, res) =>

@@ -14,6 +14,7 @@ Built to the PRD in `docs/PRD.md`, on the stack it specifies.
 - [Tech stack](#tech-stack)
 - [Quick start](#quick-start)
 - [Demo accounts](#demo-accounts)
+- [Content Studio (CMS)](#content-studio-cms)
 - [Project layout](#project-layout)
 - [How the hard parts work](#how-the-hard-parts-work)
 - [Configuration](#configuration)
@@ -59,6 +60,21 @@ Built to the PRD in `docs/PRD.md`, on the stack it specifies.
 | Refund approval queue (approve → gateway refund) | `/admin/refunds` |
 | Platform settings: commission, GST, fees, hold window, auto-approve | `/admin/settings` |
 | Full audit trail | `/admin/audit-logs` (API) |
+
+### Content Studio (CMS)
+
+A standalone blog CMS on its own login, so publishing rights can be granted without handing
+someone a platform admin account. See [Content Studio](#content-studio-cms).
+
+| Capability | Where |
+| --- | --- |
+| Separate sign-in — own accounts, own tokens, no platform access | `/cms/login` |
+| Dashboard: published/draft counts, views, activity feed | `/cms` |
+| Articles: create, edit, publish, archive, delete, search, filter | `/cms/posts` |
+| Markdown editor with slug, SEO, cover image and FAQ schema fields | `/cms/posts/[id]` |
+| Categories: create, rename, reorder, delete | `/cms/categories` |
+| Studio accounts: invite, set role, suspend, reset password, remove | `/cms/users` |
+| Change your own password (revokes every session) | `/cms/account` |
 
 Cross-cutting: transactional email (booking confirmed, payment receipt, cancellation, refund,
 24-hour reminder, OTP, organizer verified, event approved/rejected), background jobs for hold
@@ -145,6 +161,53 @@ the identical code path used in production.
 
 ---
 
+## Content Studio (CMS)
+
+The blog is managed from **`/cms`**, which is a separate application with a separate
+authentication system. A Studio account is not a platform account: it lives in `cms_users`, its
+sessions live in `cms_sessions`, and its access tokens are signed with `CMS_JWT_ACCESS_SECRET`
+under a different issuer and audience.
+
+That separation is the point. A platform admin token presented to a `/cms` endpoint fails
+signature verification outright — it is not rejected by a role check that someone could later
+loosen. It also means the reverse holds: a Studio account can publish articles and can do nothing
+else on the platform. Granting a freelance writer publishing rights no longer means granting them
+the ability to approve payouts.
+
+Practical consequences:
+
+- **No public sign-up.** Accounts are created by an existing Studio admin at `/cms/users`, or from
+  the command line for the very first one.
+- **Separate sessions.** Signing out of Tixit does not sign you out of the Studio, and the tokens
+  are kept under different `localStorage` keys and sent in a different header.
+- **Its own activity trail** (`cms_activity`), because `audit_logs.actor_id` is a foreign key into
+  `users` and a Studio account is not one.
+- **Two roles.** `editor` writes, publishes and deletes content; `admin` does that and manages
+  Studio accounts.
+
+### Setting it up
+
+```bash
+# 1. Apply the migration that creates the CMS tables
+npm run migrate
+
+# 2. Set CMS_JWT_ACCESS_SECRET in .env — different from JWT_ACCESS_SECRET
+#    openssl rand -hex 48
+
+# 3. Create the first Studio admin (prints a generated password once)
+npm run cms:user -- --email you@example.com --name "Your Name"
+```
+
+Then sign in at `/cms/login` and add the rest of the team from **Accounts**.
+
+Re-running `cms:user` for an address that already has an account resets that account's password
+and revokes its open sessions — the way back in if the only admin is locked out.
+
+The pre-existing blog editor at `/admin/blog` is untouched and still works for platform admins;
+both write to the same `blog_posts` table, so an article created in either is visible in the other.
+
+---
+
 ## Project layout
 
 ```
@@ -163,14 +226,16 @@ Tixit/
 │       │   ├── coupons/           validation and redemption
 │       │   ├── organizer/         dashboard, bookings, CSV, scanning
 │       │   ├── admin/             moderation, users, coupons, refunds, settings
+│       │   ├── blog/              articles and categories (shared by admin + CMS)
+│       │   ├── cms/               Content Studio: own accounts, tokens, guards
 │       │   └── reports/           analytics queries
 │       ├── services/              mail, storage, settings, audit, Razorpay
 │       ├── jobs/                  hold expiry, reminders, housekeeping
 │       └── utils/                 money, ids, signing, csv, dates, http
 └── web/                           Next.js client
     └── src/
-        ├── app/                   routes (public, account, organizer, admin)
-        ├── components/            UI kit, layout, dashboard, event, auth
+        ├── app/                   routes (public, account, organizer, admin, cms)
+        ├── components/            UI kit, layout, dashboard, event, auth, cms
         └── lib/                   API client, types, formatting, Razorpay loader
 ```
 
@@ -251,7 +316,11 @@ seats abandoned moments ago are immediately bookable again.
 | `RAZORPAY_WEBHOOK_SECRET` | Webhooks are acknowledged and ignored |
 | `RESEND_API_KEY` | Emails are logged to the console and recorded in `notifications` |
 | `CLOUDINARY_*` | Uploads are written to `server/uploads/` and served by the API |
-| `JWT_*_SECRET`, `QR_SECRET` | Development defaults are used — **the app refuses to boot in production without them** |
+| `JWT_*_SECRET`, `QR_SECRET`, `CMS_JWT_ACCESS_SECRET` | Development defaults are used — **the app refuses to boot in production without them** |
+
+Set `CMS_JWT_ACCESS_SECRET` to a different value from `JWT_ACCESS_SECRET`. The issuer/audience
+check would still reject a cross-posted token if they matched, but two independent secrets mean a
+leak of one key never becomes a session in the other system.
 
 Business rules (commission, GST, convenience fee, hold window, refund window, auto-approve) live
 in the `settings` table and are editable from the admin console at runtime; the env values only

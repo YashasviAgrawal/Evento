@@ -6,11 +6,18 @@ import { query, queryOne } from '../../db/pool';
 import { asyncHandler, buildPageMeta, clientIp, ok, paginated, sendCsv } from '../../utils/http';
 import { csvFilename, toCsv } from '../../utils/csv';
 import { paiseToRupees } from '../../utils/money';
-import { NotFoundError } from '../../utils/errors';
+import { BadRequestError, NotFoundError } from '../../utils/errors';
+import { uploadLimiter } from '../../middleware/rateLimit';
 import { audit } from '../../services/audit.service';
 import * as reportService from '../reports/report.service';
 import * as ticketService from '../tickets/ticket.service';
 import * as kycService from '../payouts/kyc.service';
+import {
+  kycDocumentUpload,
+  readKycDocument,
+  sendKycDocument,
+  uploadKycDocument,
+} from '../payouts/kyc-documents.service';
 import { assertEventOwnership } from '../events/event.service';
 
 const router = Router();
@@ -132,6 +139,28 @@ router.post(
       ip: clientIp(req),
     });
     return ok(res, state);
+  }),
+);
+
+/** Upload a PAN card or GST certificate; the returned id goes into the KYC submission. */
+router.post(
+  '/kyc/documents',
+  uploadLimiter,
+  kycDocumentUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    const kind = (req.body as { kind?: string })?.kind;
+    if (kind !== 'pan' && kind !== 'gst') throw new BadRequestError('kind must be "pan" or "gst"', 'INVALID_KIND');
+    if (!req.file) throw new BadRequestError('Attach the document in the "file" field', 'NO_FILE');
+    const document = await uploadKycDocument(currentOrganizerId(req), kind, req.file);
+    return ok(res, document, 201);
+  }),
+);
+
+router.get(
+  '/kyc/documents/:id',
+  validate({ params: z.object({ id: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    sendKycDocument(res, await readKycDocument(req.params.id!, currentOrganizerId(req)));
   }),
 );
 
