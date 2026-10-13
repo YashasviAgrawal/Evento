@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
-import { Check, Eye, Search, Star, X } from 'lucide-react';
+import { Archive, ArchiveRestore, Check, Eye, Search, Star, X } from 'lucide-react';
 import { api, ApiError, type PageMeta } from '@/lib/api';
 import { PageHeader } from '@/components/dashboard/shell';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ const TABS = [
   { key: 'published', label: 'Live' },
   { key: 'draft', label: 'Drafts' },
   { key: 'rejected', label: 'Rejected' },
+  { key: 'archived', label: 'Archived' },
   { key: '', label: 'All' },
 ];
 
@@ -115,6 +116,33 @@ function EventModeration() {
       await load();
     } catch (err) {
       toast.error('Could not reject', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function archive(event: AdminEvent) {
+    if (!window.confirm(`Archive "${event.title}"? It will be hidden from the site. You can restore it later.`)) return;
+    setBusyId(event.id);
+    try {
+      await api.post(`/admin/events/${event.id}/archive`);
+      toast.success('Event archived', 'It is no longer visible on the site.');
+      await load();
+    } catch (err) {
+      toast.error('Could not archive', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function unarchive(event: AdminEvent) {
+    setBusyId(event.id);
+    try {
+      await api.post(`/admin/events/${event.id}/unarchive`);
+      toast.success('Event restored', 'It is back in the status it had before archiving.');
+      await load();
+    } catch (err) {
+      toast.error('Could not restore', err instanceof ApiError ? err.message : undefined);
     } finally {
       setBusyId(null);
     }
@@ -259,6 +287,18 @@ function EventModeration() {
                     >
                       <X className="h-3.5 w-3.5" />
                       Reject
+                    </Button>
+                  )}
+
+                  {event.status === 'archived' ? (
+                    <Button variant="outline" size="sm" onClick={() => unarchive(event)} loading={busyId === event.id}>
+                      <ArchiveRestore className="h-3.5 w-3.5" />
+                      Restore
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => archive(event)} loading={busyId === event.id}>
+                      <Archive className="h-3.5 w-3.5" />
+                      Archive
                     </Button>
                   )}
                 </div>

@@ -295,6 +295,70 @@ router.post(
   }),
 );
 
+router.post(
+  '/events/:id/archive',
+  validate({ params: z.object({ id: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const event = await queryOne<{ status: string; tickets_sold: number; ends_at: Date }>(
+      'SELECT status, tickets_sold, ends_at FROM events WHERE id = $1',
+      [req.params.id],
+    );
+    if (!event) throw new NotFoundError('Event');
+    if (event.status === 'archived') throw new ConflictError('This event is already archived', 'INVALID_TRANSITION');
+    // Archiving hides the event, it does not refund anyone. Attendees of an
+    // upcoming event must go through cancellation so they get their money back.
+    if (['published', 'paused'].includes(event.status) && event.ends_at > new Date() && Number(event.tickets_sold) > 0) {
+      throw new ConflictError(
+        'This event has tickets sold and has not ended yet. Cancel it instead so attendees are refunded.',
+        'HAS_ATTENDEES',
+      );
+    }
+
+    await query(
+      `UPDATE events SET archived_from = status, status = 'archived', is_featured = false WHERE id = $1`,
+      [req.params.id],
+    );
+    invalidateCache('events:');
+    invalidateCache('catalog:');
+    await audit({
+      actorId: currentUser(req).id,
+      actorRole: 'admin',
+      action: 'event.archived',
+      entityType: 'event',
+      entityId: req.params.id,
+      metadata: { previousStatus: event.status },
+      ip: clientIp(req),
+    });
+    return ok(res, { status: 'archived' });
+  }),
+);
+
+router.post(
+  '/events/:id/unarchive',
+  validate({ params: z.object({ id: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const { rows } = await query<{ status: string }>(
+      `UPDATE events SET status = COALESCE(archived_from, 'draft'), archived_from = NULL
+        WHERE id = $1 AND status = 'archived'
+        RETURNING status`,
+      [req.params.id],
+    );
+    if (rows.length === 0) throw new ConflictError('This event is not archived', 'INVALID_TRANSITION');
+    invalidateCache('events:');
+    invalidateCache('catalog:');
+    await audit({
+      actorId: currentUser(req).id,
+      actorRole: 'admin',
+      action: 'event.unarchived',
+      entityType: 'event',
+      entityId: req.params.id,
+      metadata: { restoredStatus: rows[0]!.status },
+      ip: clientIp(req),
+    });
+    return ok(res, { status: rows[0]!.status });
+  }),
+);
+
 /* ─────────────────────── organizers ─────────────────────── */
 
 router.get(
