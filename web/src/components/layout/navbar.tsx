@@ -72,7 +72,7 @@ export function Navbar() {
       <div className="container-page">
         <div className="flex h-16 items-center gap-4">
           <Link href="/" className="flex shrink-0 items-center" aria-label="Tixit home">
-            <Image src="/brand/wordmark-white.png" alt="Tixit" width={624} height={260} className="h-8 w-auto" priority />
+            <Image src="/brand/wordmark-red.png" alt="Tixit" width={474} height={175} className="h-8 w-auto" priority />
           </Link>
 
           <div className="hidden min-w-0 flex-1 md:block">

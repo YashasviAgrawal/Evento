@@ -67,10 +67,10 @@ export function Footer() {
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center">
               <Image
-                src="/brand/lockup-black.png"
+                src="/brand/lockup-red-tagline.png"
                 alt="Tixit — Find Your Moment"
-                width={760}
-                height={419}
+                width={474}
+                height={240}
                 className="h-14 w-auto"
               />
             </Link>
