@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Rss } from 'lucide-react';
 import { fetchPublic, fetchPublicPaged } from '@/lib/api';
 import type { BlogCategory, BlogPostCard } from '@/lib/types';
 import { CategoryNav } from '@/components/blog/category-nav';
@@ -130,21 +129,12 @@ export default async function BlogIndexPage({ searchParams }: PageProps) {
               List it in minutes, take UPI and card payments, and check people in with a QR scan.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/blog/rss.xml"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 transition hover:text-ink-800"
-            >
-              <Rss className="h-4 w-4" aria-hidden />
-              RSS
-            </Link>
-            <Link
-              href="/list-your-show"
-              className="inline-flex rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
-            >
-              List your show
-            </Link>
-          </div>
+          <Link
+            href="/list-your-show"
+            className="inline-flex rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+          >
+            List your show
+          </Link>
         </div>
       </div>
     </>
