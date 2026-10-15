@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   CreditCard,
   Lock,
   MapPin,
@@ -527,7 +528,7 @@ function CheckoutFlow() {
               </div>
 
               <div className="mt-4 space-y-2 border-t border-ink-100 pt-4 text-sm">
-                <Row label="Subtotal" value={formatMoney(quote?.subtotalPaise ?? 0)} />
+                <Row label="Order amount" value={formatMoney(quote?.subtotalPaise ?? 0)} />
                 {(quote?.discountPaise ?? 0) > 0 && (
                   <Row
                     label={`Discount (${appliedCoupon})`}
@@ -535,12 +536,25 @@ function CheckoutFlow() {
                     valueClassName="text-emerald-600"
                   />
                 )}
-                <Row label="GST" value={formatMoney(quote?.taxPaise ?? 0)} />
-                <Row label="Convenience fee" value={formatMoney(quote?.convenienceFeePaise ?? 0)} />
+                <details className="group">
+                  <summary className="flex cursor-pointer list-none justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                    <span className="inline-flex items-center gap-1 text-ink-600">
+                      Fees and charges
+                      <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
+                    </span>
+                    <span className="font-medium text-ink-900">
+                      {formatMoney((quote?.convenienceFeePaise ?? 0) + (quote?.taxPaise ?? 0))}
+                    </span>
+                  </summary>
+                  <div className="mt-2 space-y-1.5 border-l-2 border-ink-100 pl-3 text-xs">
+                    <Row label="Base fee" value={formatMoney(quote?.convenienceFeePaise ?? 0)} />
+                    <Row label="GST on base fee" value={formatMoney(quote?.taxPaise ?? 0)} />
+                  </div>
+                </details>
               </div>
 
               <div className="mt-4 flex items-baseline justify-between border-t border-ink-200 pt-4">
-                <span className="text-sm font-semibold text-ink-900">Total payable</span>
+                <span className="text-sm font-semibold text-ink-900">Grand total</span>
                 <span className="text-xl font-extrabold text-ink-900">{formatMoney(quote?.totalPaise ?? 0, { withDecimals: true })}</span>
               </div>
 
