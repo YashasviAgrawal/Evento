@@ -90,7 +90,7 @@ export default function AdminSettingsPage() {
               />
             </Field>
 
-            <Field label="GST (%)" hint="Applied to the discounted subtotal">
+            <Field label="GST (%)" hint="Applied to the convenience fee">
               <Input
                 type="number"
                 min={0}
@@ -118,12 +118,16 @@ export default function AdminSettingsPage() {
           <div className="mt-5 rounded-lg bg-ink-50 p-4 text-xs text-ink-600">
             <p className="font-semibold text-ink-800">Worked example — a ₹1,000 ticket</p>
             <p className="mt-1.5">
-              Subtotal ₹1,000 → GST {settings.tax_percent}% = ₹{((1000 * Number(settings.tax_percent)) / 100).toFixed(2)} → fee{' '}
-              {settings.convenience_fee_percent}% = ₹
-              {((1000 * Number(settings.convenience_fee_percent)) / 100).toFixed(2)} →{' '}
+              Subtotal ₹1,000 → fee {settings.convenience_fee_percent}% = ₹
+              {Math.round((1000 * Number(settings.convenience_fee_percent)) / 100).toFixed(2)} → GST {settings.tax_percent}% on fee = ₹
+              {((Math.round((1000 * Number(settings.convenience_fee_percent)) / 100) * Number(settings.tax_percent)) / 100).toFixed(2)} →{' '}
               <strong className="text-ink-900">
                 customer pays ₹
-                {(1000 + (1000 * Number(settings.tax_percent)) / 100 + (1000 * Number(settings.convenience_fee_percent)) / 100).toFixed(2)}
+                {(
+                  1000 +
+                  Math.round((1000 * Number(settings.convenience_fee_percent)) / 100) *
+                    (1 + Number(settings.tax_percent) / 100)
+                ).toFixed(2)}
               </strong>
               . Organizer receives ₹{(1000 - (1000 * Number(settings.commission_percent)) / 100).toFixed(2)}, platform
               keeps ₹{((1000 * Number(settings.commission_percent)) / 100).toFixed(2)}.

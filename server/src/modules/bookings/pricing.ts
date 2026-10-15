@@ -37,8 +37,8 @@ export interface PricingRates {
  *
  * Order of operations:
  *   subtotal  →  minus coupon discount  →  taxable base
- *   tax and convenience fee are charged on the taxable base (post-discount),
- *   which is what Indian GST rules require for a discounted sale.
+ *   convenience fee is charged on the taxable base (post-discount), and GST
+ *   is charged on the convenience fee only, not on the ticket price.
  *
  * Commission is charged on the FULL pre-discount subtotal, not the discounted
  * base. A coupon is the organizer's marketing decision, so the organizer bears
@@ -55,9 +55,10 @@ export function calculatePricing(
   const cappedDiscount = Math.max(0, Math.min(discountPaise, subtotalPaise));
   const taxablePaise = subtotalPaise - cappedDiscount;
 
-  const taxPaise = percentOf(taxablePaise, rates.taxPercent);
   // Rounded to the nearest whole rupee so the customer sees ₹4, not ₹3.75.
   const convenienceFeePaise = Math.round(percentOf(taxablePaise, rates.convenienceFeePercent) / 100) * 100;
+  // GST applies to the platform's convenience fee, not the ticket price.
+  const taxPaise = percentOf(convenienceFeePaise, rates.taxPercent);
   const totalPaise = taxablePaise + taxPaise + convenienceFeePaise;
 
   /*

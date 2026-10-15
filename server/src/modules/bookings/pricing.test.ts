@@ -37,9 +37,9 @@ describe('calculatePricing', () => {
 
     expect(result.subtotalPaise).toBe(200_000);
     expect(result.quantity).toBe(2);
-    expect(result.taxPaise).toBe(36_000); // 18% of 200000
     expect(result.convenienceFeePaise).toBe(4_000); // 2% of 200000
-    expect(result.totalPaise).toBe(240_000);
+    expect(result.taxPaise).toBe(720); // 18% of the 4000 fee, not of the tickets
+    expect(result.totalPaise).toBe(204_720);
     expect(result.commissionPaise).toBe(20_000); // 10% of 200000
     expect(result.organizerPayoutPaise).toBe(180_000);
   });
@@ -49,7 +49,7 @@ describe('calculatePricing', () => {
     const result = calculatePricing([line(150, 1)], 0, { ...RATES, convenienceFeePercent: 2.5 });
 
     expect(result.convenienceFeePaise).toBe(400);
-    expect(result.totalPaise).toBe(15_000 + 2_700 + 400); // ₹150 + 18% GST ₹27 + ₹4
+    expect(result.totalPaise).toBe(15_000 + 400 + 72); // ₹150 + ₹4 fee + 18% GST on the fee ₹0.72
   });
 
   it('caps the discount at the order value, leaving nothing owed', () => {
@@ -57,13 +57,22 @@ describe('calculatePricing', () => {
     expect(result.discountPaise).toBe(50_000);
   });
 
-  it('applies tax and fees to the post-discount base, not the gross subtotal', () => {
+  it('charges a 4% fee with 18% GST on that fee', () => {
+    // 1000 ticket -> 40 fee -> 7.20 GST -> 1047.20
+    const result = calculatePricing([line(1000, 1)], 0, { ...RATES, convenienceFeePercent: 4 });
+
+    expect(result.convenienceFeePaise).toBe(4_000);
+    expect(result.taxPaise).toBe(720);
+    expect(result.totalPaise).toBe(104_720);
+  });
+
+  it('charges the fee on the post-discount base and GST on the fee', () => {
     const discount = 20_000; // ₹200 off a ₹1,000 order
     const result = calculatePricing([line(1000, 1)], discount, RATES);
 
     expect(result.taxablePaise).toBe(80_000);
-    expect(result.taxPaise).toBe(percentOf(80_000, 18));
     expect(result.convenienceFeePaise).toBe(percentOf(80_000, 2));
+    expect(result.taxPaise).toBe(percentOf(result.convenienceFeePaise, 18));
     expect(result.totalPaise).toBe(80_000 + result.taxPaise + result.convenienceFeePaise);
   });
 
