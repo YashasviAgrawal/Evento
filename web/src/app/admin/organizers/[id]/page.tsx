@@ -255,7 +255,7 @@ export default function AdminOrganizerReportPage({ params }: { params: Promise<{
           <p className="p-8 text-center text-sm text-ink-400">This organizer has not created an event yet</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[1100px] text-sm">
               <thead className="border-b border-ink-200 bg-ink-50 text-left text-xs uppercase tracking-wide text-ink-500">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Event</th>
@@ -265,6 +265,8 @@ export default function AdminOrganizerReportPage({ params }: { params: Promise<{
                   <th className="px-5 py-3 text-right font-semibold">Sell-through</th>
                   <th className="px-5 py-3 text-right font-semibold">Checked in</th>
                   <th className="px-5 py-3 text-right font-semibold">Revenue</th>
+                  <th className="px-5 py-3 text-right font-semibold">Ticket sales</th>
+                  <th className="px-5 py-3 text-right font-semibold">Commission</th>
                   <th className="px-5 py-3 text-right font-semibold">Payout</th>
                 </tr>
               </thead>
@@ -291,6 +293,12 @@ export default function AdminOrganizerReportPage({ params }: { params: Promise<{
                     </td>
                     <td className="px-5 py-3.5 text-right font-medium tabular-nums text-ink-900">
                       {formatMoney(event.revenuePaise)}
+                    </td>
+                    <td className="px-5 py-3.5 text-right tabular-nums text-ink-700">
+                      {formatMoney(event.ticketSalesPaise)}
+                    </td>
+                    <td className="px-5 py-3.5 text-right tabular-nums text-ink-700">
+                      {formatMoney(event.commissionPaise)}
                     </td>
                     <td className="px-5 py-3.5 text-right font-semibold tabular-nums text-emerald-700">
                       {formatMoney(event.payoutPaise)}

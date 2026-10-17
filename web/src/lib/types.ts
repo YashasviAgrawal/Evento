@@ -378,6 +378,8 @@ export interface EventPerformance {
   bookings: number;
   checkedIn: number;
   revenuePaise: number;
+  ticketSalesPaise: number;
+  commissionPaise: number;
   payoutPaise: number;
   sellThrough: number;
 }

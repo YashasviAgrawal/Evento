@@ -118,6 +118,8 @@ export async function getOrganizerEventPerformance(organizerId: string, limit = 
   const { rows } = await query(
     `SELECT e.id, e.title, e.slug, e.starts_at, e.status, e.total_capacity, e.tickets_sold,
             COALESCE(sum(b.total_paise) FILTER (WHERE b.status IN ${EARNED_STATUSES}), 0)::bigint AS revenue,
+            COALESCE(sum(b.subtotal_paise) FILTER (WHERE b.status IN ${EARNED_STATUSES}), 0)::bigint AS ticket_sales,
+            COALESCE(sum(b.commission_paise) FILTER (WHERE b.status IN ${EARNED_STATUSES}), 0)::bigint AS commission,
             COALESCE(sum(b.organizer_payout_paise) FILTER (WHERE b.status IN ${EARNED_STATUSES}), 0)::bigint AS payout,
             count(DISTINCT b.id) FILTER (WHERE b.status IN ${EARNED_STATUSES})::int AS bookings,
             (SELECT count(*)::int FROM tickets t WHERE t.event_id = e.id AND t.status = 'used') AS checked_in
@@ -141,6 +143,8 @@ export async function getOrganizerEventPerformance(organizerId: string, limit = 
     bookings: Number(row.bookings),
     checkedIn: Number(row.checked_in),
     revenuePaise: Number(row.revenue),
+    ticketSalesPaise: Number(row.ticket_sales),
+    commissionPaise: Number(row.commission),
     payoutPaise: Number(row.payout),
     sellThrough:
       Number(row.total_capacity) > 0 ? Math.round((Number(row.tickets_sold) / Number(row.total_capacity)) * 100) : 0,
