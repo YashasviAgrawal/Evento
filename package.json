@@ -3,10 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "description": "Tixit — event discovery and ticket booking platform (customers, organizers, admin).",
-  "workspaces": [
-    "server",
-    "web"
-  ],
   "engines": {
     "node": ">=20.9.0"
   },

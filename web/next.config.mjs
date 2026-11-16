@@ -2,24 +2,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
-/**
- * Next only reads .env files sitting next to this config, but the project keeps
- * a single .env at the repo root that both workspaces share. Load it here so
- * NEXT_PUBLIC_* values written there actually reach the browser bundle; a
- * variable already set in the real environment (as on a hosting platform) wins,
- * because dotenv never overwrites what is already defined.
- */
-dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.env') });
+const configDir = path.dirname(fileURLToPath(import.meta.url));
 
-/**
- * Inlined explicitly, because Next's automatic NEXT_PUBLIC_ handling only
- * covers variables it loaded from its own .env files — not the ones dotenv
- * just put on process.env.
- *
- * Blank and missing values are omitted rather than inlined as "", so the
- * `process.env.X ?? 'default'` fallbacks in the app still fire. Inlining an
- * empty string would satisfy `??` and quietly defeat every one of them.
- */
+dotenv.config({ path: path.resolve(configDir, '../.env') });
+
 const publicEnv = Object.fromEntries(
   [
     'NEXT_PUBLIC_API_URL',
@@ -34,12 +20,12 @@ const publicEnv = Object.fromEntries(
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
+  outputFileTracingRoot: configDir,
   reactStrictMode: true,
   poweredByHeader: false,
   env: publicEnv,
   images: {
-    // Event banners come from Cloudinary in production and Unsplash in the
-    // demo seed; local uploads are served by the API itself.
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'res.cloudinary.com' },
