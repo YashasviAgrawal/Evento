@@ -21,6 +21,8 @@ export function Footer() {
           <a href={`${EVENTS_URL}/privacy`} className="text-ink-600 hover:text-ink-900">Privacy</a>
           <a href={EVENTS_URL} className="text-ink-600 hover:text-ink-900">Tixit Events</a>
           <a href={`${EVENTS_URL}/support`} className="text-ink-600 hover:text-ink-900">Support</a>
+          <Link href="/grievance" className="text-ink-600 hover:text-ink-900">Grievance officer</Link>
+          <Link href="/account/privacy" className="text-ink-600 hover:text-ink-900">Privacy settings</Link>
         </div>
       </div>
       <div className="border-t border-ink-100 py-5 text-center text-xs text-ink-400">

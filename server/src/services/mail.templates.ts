@@ -88,7 +88,25 @@ export interface TemplateData {
     lines: Array<{ label: string; amountPaise: number }>;
     url: string;
   };
+  privacy_update: {
+    name: string;
+    reference: string;
+    kind: string;
+    status: 'received' | 'in_progress' | 'completed' | 'rejected';
+    message: string | null;
+    dueAt: Date | null;
+  };
+  grievance_update: {
+    name: string;
+    reference: string;
+    subject: string;
+    status: 'received' | 'in_progress' | 'resolved' | 'closed';
+    response: string | null;
+    dueAt: Date | null;
+  };
 }
+
+
 
 
 
@@ -394,6 +412,43 @@ export function renderTemplate<T extends TemplateName>(name: T, data: TemplateDa
         subject: `Receipt ${d.code} · ${formatINR(d.amountPaise)} at ${d.restaurant}`,
         html: layout('Payment received', `<p>Hi ${d.name}, thanks for paying with Tixit.</p>${saved}${detailRows(rows)}`, { label: 'View receipt', url: d.url }),
         text: `Paid ${formatINR(d.amountPaise)} at ${d.restaurant} (${d.code}). Saved ${formatINR(d.savedPaise)}. ${d.url}`,
+      };
+    }
+
+    case 'privacy_update': {
+      const d = data as TemplateData['privacy_update'];
+      const kinds: Record<string, string> = { access: 'access to your data', correction: 'a correction', erasure: 'deletion of your account', nominate: 'a nominee' };
+      const lead =
+        d.status === 'received'
+          ? `We have received your request for ${kinds[d.kind] ?? d.kind}. We will respond by ${d.dueAt ? new Date(d.dueAt).toDateString() : 'the due date'}.`
+          : d.status === 'completed'
+            ? `Your request for ${kinds[d.kind] ?? d.kind} is complete.`
+            : d.status === 'rejected'
+              ? `We could not complete your request for ${kinds[d.kind] ?? d.kind}.`
+              : `We are working on your request for ${kinds[d.kind] ?? d.kind}.`;
+      const body = `<p>Hi ${d.name}, ${lead}</p>${d.message ? `<p>${d.message}</p>` : ''}${detailRows([['Reference', d.reference]])}`;
+      return {
+        subject: `Privacy request ${d.reference}`,
+        html: layout('Your privacy request', body),
+        text: `${lead} Reference ${d.reference}.${d.message ? ` ${d.message}` : ''}`,
+      };
+    }
+
+    case 'grievance_update': {
+      const d = data as TemplateData['grievance_update'];
+      const lead =
+        d.status === 'received'
+          ? `We have received your complaint and will resolve it by ${d.dueAt ? new Date(d.dueAt).toDateString() : 'the due date'}.`
+          : d.status === 'resolved' || d.status === 'closed'
+            ? 'Our grievance officer has responded to your complaint.'
+            : 'Our grievance officer is looking into your complaint.';
+      const body = `<p>Hi ${d.name}, ${lead}</p>${detailRows([['Reference', d.reference], ['Subject', d.subject]])}${
+        d.response ? `<p style="margin-top:16px;padding:14px;background:#fafafa;border-radius:10px;">${d.response}</p>` : ''
+      }`;
+      return {
+        subject: `Complaint ${d.reference}: ${d.subject}`,
+        html: layout('Your complaint', body),
+        text: `${lead} Reference ${d.reference}.${d.response ? ` Response: ${d.response}` : ''}`,
       };
     }
 

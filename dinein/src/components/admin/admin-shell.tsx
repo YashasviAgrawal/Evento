@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ExternalLink, LogOut, ShieldAlert, Store, Tag } from 'lucide-react';
+import { ExternalLink, Inbox, LogOut, ShieldAlert, Store, Tag } from 'lucide-react';
 import { useAuth } from '@tixit/session';
 import { cn } from '@/lib/format';
 import { EVENTS_URL } from '@/lib/urls';
@@ -53,6 +53,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           {[
             { href: '/admin', label: 'Restaurants', icon: Store, active: pathname === '/admin' || /^\/admin\/[0-9a-f-]{36}/.test(pathname) },
             { href: '/admin/offers', label: 'Codes & bank offers', icon: Tag, active: pathname.startsWith('/admin/offers') },
+            { href: '/admin/desk', label: 'Grievances & privacy', icon: Inbox, active: pathname.startsWith('/admin/desk') },
           ].map(({ href, label, icon: Icon, active }) => (
             <Link
               key={href}
@@ -76,6 +77,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <span className="flex gap-1.5">
             <Link href="/admin" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Restaurants</Link>
             <Link href="/admin/offers" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Offers</Link>
+            <Link href="/admin/desk" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Desk</Link>
           </span>
         </header>
         {children}

@@ -302,6 +302,7 @@ async function clearDemoData(): Promise<void> {
       ticket_types, events, venues, coupons, notifications, audit_logs, otp_codes, refresh_tokens, organizers,
       finance.entries, finance.transactions, finance.settlements, finance.accounts,
       finance.wallet_redemptions, finance.wallet_credits, outbox_events,
+      privacy.consents, privacy.requests, privacy.grievances,
       dining.reviews, dining.offer_redemptions, dining.bill_payments, dining.reservations, dining.slots,
       dining.offers, dining.inventory_rules, dining.restaurant_members, dining.restaurant_media,
       dining.collections, dining.restaurants

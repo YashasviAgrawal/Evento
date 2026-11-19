@@ -26,6 +26,7 @@ import diningRoutes from './modules/dining/dining.routes';
 import partnerRoutes from './modules/dining/partner/partner.routes';
 import diningAdminRoutes from './modules/dining/admin/dining-admin.routes';
 import walletRoutes from './modules/finance/wallet.routes';
+import { privacyAdminRoutes, privacyRoutes } from './modules/privacy/privacy.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -146,6 +147,7 @@ export function createApp(): Express {
   // 404 on an unknown /blog path inside its own router.
   api.use('/admin/blog', adminBlogRoutes);
   api.use('/admin/dining', diningAdminRoutes);
+  api.use('/admin/privacy', privacyAdminRoutes);
   api.use('/admin', adminRoutes);
   // The CMS authenticates against its own account table with its own signing
   // key, so it mounts as a peer of /admin rather than underneath it.
@@ -156,6 +158,7 @@ export function createApp(): Express {
   api.use('/dining', diningRoutes);
   api.use('/partner', partnerRoutes);
   api.use('/wallet', walletRoutes);
+  api.use('/privacy', privacyRoutes);
 
   api.get('/', (_req, res) =>
     ok(res, {

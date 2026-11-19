@@ -152,6 +152,14 @@ export const env = {
     },
   },
 
+  /** Published on the grievance page, as the IT and consumer-protection rules require. */
+  grievanceOfficer: {
+    name: str('GRIEVANCE_OFFICER_NAME', 'Grievance Officer, Tixit'),
+    email: str('GRIEVANCE_OFFICER_EMAIL', 'grievance@tixit.in'),
+    phone: optional('GRIEVANCE_OFFICER_PHONE'),
+    address: str('GRIEVANCE_OFFICER_ADDRESS', 'Tixit, Jaipur, Rajasthan, India'),
+  },
+
   mail: {
     resendApiKey: optional('RESEND_API_KEY'),
     from: str('MAIL_FROM', 'Tixit <tickets@tixit.in>'),

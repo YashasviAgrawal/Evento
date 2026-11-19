@@ -37,6 +37,7 @@ export function AuthScreen() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [marketing, setMarketing] = useState(false);
   const [code, setCode] = useState('');
   const [devCode, setDevCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -70,7 +71,15 @@ export function AuthScreen() {
     event.preventDefault();
     if (stage === 'verify') {
       void run(async () => {
-        if (mode === 'signup') await verifyEmail(email, code, 'signup');
+        if (mode === 'signup') {
+          await verifyEmail(email, code, 'signup');
+          // Consent is recorded only once there is an account to attach it to.
+          if (marketing) {
+            await api
+              .put('/privacy/consents', { consents: [{ purpose: 'marketing_email', granted: true }], source: 'signup' })
+              .catch(() => undefined);
+          }
+        }
         else if (mode === 'phone') await signInWithPhoneOtp(phone, code);
         else await signInWithOtp(email, code);
         router.replace(next);
@@ -311,6 +320,16 @@ export function AuthScreen() {
                   </div>
                 )}
               </>
+            )}
+
+            {mode === 'signup' && stage === 'form' && (
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-ink-50 p-3 text-xs leading-relaxed text-ink-600">
+                <input type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-600" />
+                <span>
+                  Send me offers and new restaurants by email (optional — change any time in Privacy settings). We use your details to run
+                  your bookings and payments as described in our privacy notice.
+                </span>
+              </label>
             )}
 
             {error && (

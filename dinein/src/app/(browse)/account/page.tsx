@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CalendarCheck2, ChevronRight, ExternalLink, LogOut, ReceiptText, Store, Ticket, UserRound, Wallet } from 'lucide-react';
+import { CalendarCheck2, ChevronRight, ExternalLink, LogOut, ReceiptText, Scale, ShieldCheck, Store, Ticket, UserRound, Wallet } from 'lucide-react';
 import { useAuth } from '@tixit/session';
 import { initials } from '@/lib/format';
 import { EVENTS_URL } from '@/lib/urls';
@@ -58,6 +58,12 @@ export default function AccountPage() {
         <li><a href={`${EVENTS_URL}/account/bookings`} className={row}><Ticket className="h-5 w-5 text-ink-400" /><span className="flex-1 font-semibold">Event tickets</span><ExternalLink className="h-4 w-4 text-ink-300" /></a></li>
       </ul>
       <p className="mt-2 px-1 text-xs text-ink-500">Same account on tixit.in — you’re already signed in there.</p>
+
+      <h2 className="eyebrow mt-8 text-ink-400">Privacy &amp; help</h2>
+      <ul className="mt-2 divide-y divide-ink-100 overflow-hidden rounded-3xl bg-white ring-1 ring-ink-200">
+        <li><Link href="/account/privacy" className={row}><ShieldCheck className="h-5 w-5 text-ink-400" /><span className="flex-1 font-semibold">Privacy, consents &amp; my data</span><ChevronRight className="h-4 w-4 text-ink-300" /></Link></li>
+        <li><Link href="/grievance" className={row}><Scale className="h-5 w-5 text-ink-400" /><span className="flex-1 font-semibold">Raise a complaint</span><ChevronRight className="h-4 w-4 text-ink-300" /></Link></li>
+      </ul>
 
       <button onClick={() => void signOut()} className="press mt-8 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white font-bold text-rose-600 ring-1 ring-inset ring-ink-200">
         <LogOut className="h-4 w-4" /> Sign out of Tixit
