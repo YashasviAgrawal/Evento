@@ -1,12 +1,13 @@
 /**
- * Dine-in emails. Fired after the change commits and never awaited by the
- * request: a slow mail provider must not slow a booking or a payment, and a
- * failed send is recorded in `notifications` for retry (see mail.service).
+ * Dine-in emails, delivered through the transactional outbox: the event is
+ * written in the same transaction as the booking or payment, and sent after
+ * it commits. A slow mail provider never slows a request, and a crash between
+ * commit and send cannot lose an email.
  */
 import { env } from '../../config/env';
-import { query, queryOne } from '../../db/pool';
-import { logger } from '../../config/logger';
-import { sendMailAsync } from '../../services/mail.service';
+import { query, queryOne, type Queryable } from '../../db/pool';
+import { sendMail } from '../../services/mail.service';
+import { enqueue, kickOutbox, onOutbox } from '../platform/outbox';
 import type { TemplateData } from '../../services/mail.templates';
 import { DINING_TZ } from './time';
 import type { BillPricing } from './offers/engine';
@@ -23,8 +24,10 @@ function when(date: Date): string {
   });
 }
 
-export function notifyReservation(reservationId: string, kind: TemplateData['dining_reservation']['kind']): void {
-  void (async () => {
+type ReservationKind = TemplateData['dining_reservation']['kind'];
+
+async function sendReservationEmail(reservationId: string, kind: ReservationKind): Promise<void> {
+  {
     const row = await queryOne<{
       code: string;
       starts_at: Date;
@@ -45,7 +48,7 @@ export function notifyReservation(reservationId: string, kind: TemplateData['din
       [reservationId],
     );
     if (!row) return;
-    sendMailAsync({
+    await sendMail({
       to: row.email,
       template: 'dining_reservation',
       userId: row.user_id,
@@ -61,11 +64,11 @@ export function notifyReservation(reservationId: string, kind: TemplateData['din
         url: kind === 'declined' ? `${env.dineinBaseUrl}/restaurants?openNow=1` : `${env.dineinBaseUrl}/bookings/${row.code}`,
       },
     });
-  })().catch((err) => logger.error({ err, reservationId }, 'Could not queue reservation email'));
+  }
 }
 
-export function notifyBillPaid(billId: string): void {
-  void (async () => {
+async function sendReceiptEmail(billId: string): Promise<void> {
+  {
     const row = await queryOne<{
       code: string;
       paid_at: Date;
@@ -85,7 +88,7 @@ export function notifyBillPaid(billId: string): void {
       [billId],
     );
     if (!row) return;
-    sendMailAsync({
+    await sendMail({
       to: row.email,
       template: 'dining_bill_receipt',
       userId: row.user_id,
@@ -103,23 +106,44 @@ export function notifyBillPaid(billId: string): void {
         url: `${env.dineinBaseUrl}/bills/${row.code}`,
       },
     });
-  })().catch((err) => logger.error({ err, billId }, 'Could not queue receipt email'));
+  }
 }
 
+export const TOPICS = {
+  reservationChanged: 'dining.reservation.changed',
+  billPaid: 'dining.bill.paid',
+} as const;
+
+onOutbox(TOPICS.reservationChanged, (payload) =>
+  sendReservationEmail(String(payload.reservationId), payload.kind as ReservationKind),
+);
+onOutbox(TOPICS.billPaid, (payload) => (payload.notify === false ? Promise.resolve() : sendReceiptEmail(String(payload.billId))));
+
+/** Record a reservation change for the diner, in the caller's transaction. */
+export function queueReservationEmail(client: Queryable, reservationId: string, kind: ReservationKind): Promise<void> {
+  return enqueue(client, TOPICS.reservationChanged, { reservationId, kind });
+}
+
+export { kickOutbox };
+
 /**
- * Remind diners two hours before their table. Each row is claimed with a
- * guarded UPDATE before mailing, so concurrent runs never double-send.
+ * Remind diners two hours before their table. Claiming the rows and queueing
+ * the emails is one statement, so a reminder is sent exactly once.
  */
 export async function sendReservationReminders(): Promise<number> {
   const { rows } = await query<{ id: string }>(
-    `UPDATE dining.reservations SET reminded_at = now()
-      WHERE id IN (
-        SELECT id FROM dining.reservations
-         WHERE reminded_at IS NULL AND status IN ('placed', 'confirmed')
-           AND starts_at BETWEEN now() + interval '30 minutes' AND now() + interval '2 hours 15 minutes'
-         LIMIT 200 FOR UPDATE SKIP LOCKED)
-      RETURNING id`,
+    `WITH claimed AS (
+       UPDATE dining.reservations SET reminded_at = now()
+        WHERE id IN (
+          SELECT id FROM dining.reservations
+           WHERE reminded_at IS NULL AND status IN ('placed', 'confirmed')
+             AND starts_at BETWEEN now() + interval '30 minutes' AND now() + interval '2 hours 15 minutes'
+           LIMIT 200 FOR UPDATE SKIP LOCKED)
+        RETURNING id)
+     INSERT INTO outbox_events (topic, payload)
+     SELECT '${TOPICS.reservationChanged}', jsonb_build_object('reservationId', id, 'kind', 'reminder') FROM claimed
+     RETURNING id`,
   );
-  rows.forEach((row) => notifyReservation(row.id, 'reminder'));
+  if (rows.length) kickOutbox();
   return rows.length;
 }

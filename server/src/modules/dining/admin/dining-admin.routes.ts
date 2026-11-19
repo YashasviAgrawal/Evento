@@ -5,6 +5,9 @@ import { validate } from '../../../middleware/validate';
 import { asyncHandler, ok } from '../../../utils/http';
 import { audit } from '../../../services/audit.service';
 import * as admin from './dining-admin.service';
+import { onTransferEvent } from '../../payments/payment.service';
+
+onTransferEvent(admin.onTransferEvent);
 
 /** Dining operations for platform admins: onboarding, go-live, staff, payouts. */
 const router = Router();
@@ -102,6 +105,28 @@ router.post(
       metadata: result,
     });
     return ok(res, result, 201);
+  }),
+);
+
+router.get('/offers', asyncHandler(async (_req, res) => ok(res, await admin.listPlatformOffers())));
+
+router.post(
+  '/offers',
+  validate({ body: admin.platformOfferInput }),
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req);
+    const offer = await admin.createPlatformOffer(req.body, user.id);
+    await audit({ actorId: user.id, actorRole: user.role, action: 'dining.offer.created', entityType: 'dining.offer', entityId: offer.id });
+    return ok(res, offer, 201);
+  }),
+);
+
+router.patch(
+  '/offers/:id',
+  validate({ params: idParam, body: z.object({ status: z.enum(['active', 'paused', 'archived']) }) }),
+  asyncHandler(async (req, res) => {
+    await admin.setPlatformOfferStatus(req.params.id!, req.body.status);
+    return ok(res, { status: req.body.status });
   }),
 );
 

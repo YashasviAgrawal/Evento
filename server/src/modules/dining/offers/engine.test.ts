@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { priceBill, offerIneligibility, discountFor, type EngineOffer, type PriceBillInput } from './engine';
+import { priceBill, offerIneligibility, discountFor, type BillPricing, type EngineOffer, type PriceBillInput } from './engine';
 import { toLocalMoment } from '../time';
 import { codeAt, newVerifySecret } from '../bills/verification';
 
@@ -45,6 +45,18 @@ function input(overrides: Partial<PriceBillInput> = {}): PriceBillInput {
   };
 }
 
+/**
+ * Money in = money out: what the diner pays, plus every rupee someone else
+ * funded (platform promos, bank offers, the deposit, the wallet), equals what
+ * the restaurant is paid plus what the platform keeps.
+ */
+function expectBalanced(result: BillPricing) {
+  const platformTake = result.convenienceFeePaise + result.commissionPaise + result.commissionGstPaise;
+  const fundedElsewhere =
+    result.platformFundedDiscountPaise + result.bankFundedDiscountPaise + result.coverCreditPaise + result.walletUsedPaise;
+  expect(result.amountPayablePaise + fundedElsewhere).toBe(result.restaurantPayoutPaise + platformTake);
+}
+
 describe('dining pricing engine', () => {
   it('prices the ₹2,000 / 20% / 8% example from the plan', () => {
     const result = priceBill(input());
@@ -65,8 +77,7 @@ describe('dining pricing engine', () => {
         coupon: offer({ id: 'c', owner: 'platform', code: 'TIXIT', kind: 'flat', percentOff: null, flatOffPaise: 10_000, restaurantFundedPct: 0 }),
       }),
     );
-    const platformTake = result.convenienceFeePaise + result.commissionPaise + result.commissionGstPaise;
-    expect(result.amountPayablePaise).toBe(result.restaurantPayoutPaise + platformTake - result.platformFundedDiscountPaise);
+    expectBalanced(result);
   });
 
   it('never discounts items marked not-on-offer, service charge or tip', () => {
@@ -142,15 +153,52 @@ describe('dining pricing engine', () => {
           serviceChargePercent: 5,
           restaurantOffers: [offer({ percentOff: Math.ceil(Math.random() * 50), restaurantFundedPct: Math.floor(Math.random() * 101) })],
           coupon: offer({ id: 'c', owner: 'platform', code: 'X', kind: 'flat', percentOff: null, flatOffPaise: 20_000, restaurantFundedPct: 0 }),
+          bankOffer: offer({ id: 'b', owner: 'bank', bankName: 'HDFC', percentOff: 10, maxDiscountPaise: 20_000, restaurantFundedPct: 20 }),
+          coverDepositPaise: Math.random() > 0.5 ? Math.floor(Math.random() * 100_000) : 0,
+          walletAvailablePaise: Math.floor(Math.random() * 50_000),
+          walletMaxPercent: 50,
         }),
       );
+      expect(result.walletUsedPaise).toBeLessThanOrEqual(Math.ceil((result.amountPayablePaise - result.convenienceFeePaise + result.walletUsedPaise) / 2));
       expect(result.amountPayablePaise).toBeGreaterThanOrEqual(0);
       expect(result.totalDiscountPaise).toBeLessThanOrEqual(result.discountablePaise);
       const sum = result.lines.reduce((total, line) => total + line.amountPaise, 0);
       expect(sum).toBe(result.amountPayablePaise);
-      const platformTake = result.convenienceFeePaise + result.commissionPaise + result.commissionGstPaise;
-      expect(result.amountPayablePaise).toBe(result.restaurantPayoutPaise + platformTake - result.platformFundedDiscountPaise);
+      expectBalanced(result);
     }
+  });
+});
+
+describe('bank offers, table deposits and the wallet', () => {
+  const hdfc = offer({ id: 'hdfc', owner: 'bank', bankName: 'HDFC', title: 'HDFC cards: 10% off', percentOff: 10, maxDiscountPaise: 15_000, restaurantFundedPct: 0 });
+
+  it('stacks a bank offer after the restaurant offer, funded by the bank', () => {
+    const result = priceBill(input({ bankOffer: hdfc }));
+    // 20% restaurant offer leaves 1,600; 10% of that is 160, capped at 150.
+    expect(result.bankOffer?.discountPaise).toBe(15_000);
+    expect(result.bankFundedDiscountPaise).toBe(15_000);
+    expect(result.lines.find((l) => l.key === 'bank_offer')?.fundedBy).toBe('bank');
+    // Bank-funded discounts do not reduce the restaurant's net sales.
+    expect(result.commissionBasePaise).toBe(160_000);
+    expectBalanced(result);
+  });
+
+  it('credits the table deposit against the bill, never beyond it', () => {
+    const credited = priceBill(input({ coverDepositPaise: 50_000 }));
+    expect(credited.coverCreditPaise).toBe(50_000);
+    expect(credited.amountPayablePaise).toBe(160_000 - 50_000 + 1000);
+    const tiny = priceBill(input({ billTotalPaise: 30_000, coverDepositPaise: 50_000, restaurantOffers: [] }));
+    expect(tiny.coverCreditPaise).toBe(30_000);
+    expect(tiny.amountPayablePaise).toBe(1000);
+    expectBalanced(credited);
+  });
+
+  it('caps the wallet at its share of the bill and never charges the restaurant for it', () => {
+    const result = priceBill(input({ walletAvailablePaise: 200_000, walletMaxPercent: 50 }));
+    expect(result.walletUsedPaise).toBe(80_000);
+    expect(result.restaurantPayoutPaise).toBe(priceBill(input()).restaurantPayoutPaise);
+    expect(priceBill(input({ walletAvailablePaise: 5000, walletMaxPercent: 50 })).walletUsedPaise).toBe(5000);
+    expectBalanced(result);
   });
 });
 

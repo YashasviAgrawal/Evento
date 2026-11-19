@@ -10,6 +10,9 @@ import { slotsForDate } from './reservations/availability.service';
 import * as reservations from './reservations/reservation.service';
 import * as bills from './bills/bill.service';
 import { createReview } from './reviews.service';
+import * as cover from './reservations/cover.service';
+// Registers the outbox handlers for dine-in emails.
+import './notifications';
 
 /** Public discovery plus the signed-in diner's bookings and bills. */
 const router = Router();
@@ -177,6 +180,37 @@ router.post(
   asyncHandler(async (req, res) =>
     ok(res, await reservations.cancelByDiner(req.params.code!, currentUser(req).id, req.body.reason)),
   ),
+);
+
+/* ───────────────────────── table deposits ───────────────────────── */
+
+const codeParam = z.object({ code: z.string().min(4).max(20) });
+
+router.post(
+  '/reservations/:code/deposit',
+  validate({ params: codeParam }),
+  asyncHandler(async (req, res) => ok(res, await cover.startCoverPayment(currentUser(req).id, req.params.code!))),
+);
+
+router.post(
+  '/reservations/:code/deposit/verify',
+  validate({
+    params: codeParam,
+    body: z.object({
+      razorpayOrderId: z.string().min(4).max(120),
+      razorpayPaymentId: z.string().min(4).max(120),
+      razorpaySignature: z.string().min(16).max(256),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req);
+    await cover.verifyCoverPayment(user.id, req.params.code!, {
+      orderId: req.body.razorpayOrderId,
+      paymentId: req.body.razorpayPaymentId,
+      signature: req.body.razorpaySignature,
+    });
+    return ok(res, await reservations.getReservationForUser(req.params.code!, user.id));
+  }),
 );
 
 export default router;

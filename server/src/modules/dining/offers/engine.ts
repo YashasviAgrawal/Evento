@@ -10,9 +10,12 @@
  *   1. discountable base   = bill − items not on offer  (service charge is never in the bill)
  *   2. restaurant offer    best eligible one, by rupees saved
  *   3. platform coupon     at most one, on what is still discountable
- *   4. + optional service charge (opt-in, never discounted, no commission)
- *   5. + tip                (passes to the restaurant in full)
- *   6. + platform fee       (flat, GST inclusive)
+ *   4. bank offer          at most one, chosen at checkout, on what is still discountable
+ *   5. + optional service charge (opt-in, never discounted, no commission)
+ *   6. + tip                (passes to the restaurant in full)
+ *   7. − table deposit      cover charge paid at booking, credited here
+ *   8. − Tixit Wallet       capped at a share of what is left
+ *   9. + platform fee       (flat, GST inclusive)
  *
  * Every line carries who funds it, which is what the diner's receipt shows and
  * what the ledger posts. Amounts are integer paise and every step rounds
@@ -20,11 +23,11 @@
  */
 import { timeToMinutes, type LocalMoment } from '../time';
 
-export const ENGINE_VERSION = '1.0.0';
+export const ENGINE_VERSION = '2.0.0';
 const GST_PERCENT = 18;
 
 export type OfferMode = 'prebook' | 'walkin';
-export type FundedBy = 'restaurant' | 'platform' | 'shared';
+export type FundedBy = 'restaurant' | 'platform' | 'bank' | 'shared';
 
 export interface EngineOffer {
   id: string;
@@ -44,6 +47,8 @@ export interface EngineOffer {
   validUntil: Date | null;
   perUserLimit: number | null;
   restaurantFundedPct: number;
+  /** Bank offers only: the bank funding the non-restaurant share. */
+  bankName?: string | null;
 }
 
 export interface PriceBillInput {
@@ -64,8 +69,16 @@ export interface PriceBillInput {
   coupon?: EngineOffer | null;
   /** Code the diner typed but that matched nothing, to report back. */
   couponCodeNotFound?: string | null;
+  /** The bank offer the diner chose to pay with, if any. */
+  bankOffer?: EngineOffer | null;
   /** Prior redemptions by this diner, keyed by offer id. */
   usage?: Record<string, number>;
+  /** Cover charge paid at booking and not yet credited. */
+  coverDepositPaise?: number;
+  /** Wallet balance the diner chose to use (0 to not use it). */
+  walletAvailablePaise?: number;
+  /** At most this % of the bill after discounts and deposit can come from the wallet. */
+  walletMaxPercent?: number;
   convenienceFeePaise: number;
   commissionBps: number;
 }
@@ -86,6 +99,8 @@ export interface AppliedOffer {
   discountPaise: number;
   restaurantSharePaise: number;
   platformSharePaise: number;
+  bankSharePaise: number;
+  bankName?: string | null;
 }
 
 export interface BillPricing {
@@ -96,13 +111,18 @@ export interface BillPricing {
   restaurantOffer: AppliedOffer | null;
   coupon: AppliedOffer | null;
   couponError: string | null;
+  bankOffer: AppliedOffer | null;
+  bankOfferError: string | null;
   serviceChargePaise: number;
   tipPaise: number;
+  coverCreditPaise: number;
+  walletUsedPaise: number;
   convenienceFeePaise: number;
   convenienceFeeGstPaise: number;
   totalDiscountPaise: number;
   restaurantFundedDiscountPaise: number;
   platformFundedDiscountPaise: number;
+  bankFundedDiscountPaise: number;
   amountPayablePaise: number;
   commissionBasePaise: number;
   commissionPaise: number;
@@ -154,22 +174,30 @@ export function discountFor(offer: EngineOffer, basePaise: number): number {
   return Math.max(0, Math.min(discount, basePaise));
 }
 
+/** Split a discount between the restaurant and whoever funds the rest. */
 function apply(offer: EngineOffer, discountPaise: number): AppliedOffer {
   const restaurantShare = pct(discountPaise, offer.restaurantFundedPct);
+  const rest = discountPaise - restaurantShare;
+  const bank = offer.owner === 'bank';
   return {
     id: offer.id,
     title: offer.title,
     code: offer.code,
     discountPaise,
     restaurantSharePaise: restaurantShare,
-    platformSharePaise: discountPaise - restaurantShare,
+    platformSharePaise: bank ? 0 : rest,
+    bankSharePaise: bank ? rest : 0,
+    bankName: bank ? (offer.bankName ?? null) : undefined,
   };
 }
 
 function fundedBy(applied: AppliedOffer): FundedBy {
-  if (applied.platformSharePaise === 0) return 'restaurant';
-  if (applied.restaurantSharePaise === 0) return 'platform';
-  return 'shared';
+  const funders = [
+    applied.restaurantSharePaise > 0 && 'restaurant',
+    applied.platformSharePaise > 0 && 'platform',
+    applied.bankSharePaise > 0 && 'bank',
+  ].filter(Boolean) as FundedBy[];
+  return funders.length === 1 ? funders[0]! : funders.length === 0 ? 'restaurant' : 'shared';
 }
 
 /* ───────────────────────── engine ───────────────────────── */
@@ -198,7 +226,7 @@ export function priceBill(input: PriceBillInput): BillPricing {
   if (best && best.discount > 0) restaurantOffer = apply(best.offer, best.discount);
 
   // 3. Coupon, on what is still discountable.
-  const remaining = discountable - (restaurantOffer?.discountPaise ?? 0);
+  let remaining = discountable - (restaurantOffer?.discountPaise ?? 0);
   let coupon: AppliedOffer | null = null;
   let couponError: string | null = input.couponCodeNotFound ? 'This code is not valid' : null;
   if (input.coupon) {
@@ -211,21 +239,49 @@ export function priceBill(input: PriceBillInput): BillPricing {
       else couponError = 'Nothing left on this bill for the code to discount';
     }
   }
+  remaining -= coupon?.discountPaise ?? 0;
 
-  // 4–6. Additions.
+  // 4. Bank offer, chosen by the diner for the instrument they pay with.
+  let bankOffer: AppliedOffer | null = null;
+  let bankOfferError: string | null = null;
+  if (input.bankOffer) {
+    const reason = offerIneligibility(input.bankOffer, context);
+    if (reason) bankOfferError = reason;
+    else {
+      const discount = discountFor(input.bankOffer, remaining);
+      if (discount > 0) bankOffer = apply(input.bankOffer, discount);
+      else bankOfferError = 'Nothing left on this bill for the bank offer to discount';
+    }
+  }
+
+  const applied = [restaurantOffer, coupon, bankOffer].filter((offer): offer is AppliedOffer => Boolean(offer));
+  const restaurantFunded = applied.reduce((sum, offer) => sum + offer.restaurantSharePaise, 0);
+  const platformFunded = applied.reduce((sum, offer) => sum + offer.platformSharePaise, 0);
+  const bankFunded = applied.reduce((sum, offer) => sum + offer.bankSharePaise, 0);
+  const totalDiscount = restaurantFunded + platformFunded + bankFunded;
+
+  // 5–6. Additions.
   const serviceCharge = input.keepServiceCharge ? pct(bill, input.serviceChargePercent) : 0;
   const tip = Math.max(0, Math.round(input.tipPaise));
+  let due = bill - totalDiscount + serviceCharge + tip;
+
+  // 7. Table deposit already paid at booking.
+  const coverCredit = Math.min(Math.max(0, Math.round(input.coverDepositPaise ?? 0)), due);
+  due -= coverCredit;
+
+  // 8. Wallet, never the whole bill.
+  const walletCap = pct(due, Math.min(100, Math.max(0, input.walletMaxPercent ?? 0)));
+  const walletUsed = Math.min(Math.max(0, Math.round(input.walletAvailablePaise ?? 0)), walletCap);
+  due -= walletUsed;
+
+  // 9. Platform fee.
   const fee = bill > 0 ? Math.max(0, Math.round(input.convenienceFeePaise)) : 0;
   const feeGst = Math.round((fee * GST_PERCENT) / (100 + GST_PERCENT));
-
-  const restaurantFunded = (restaurantOffer?.restaurantSharePaise ?? 0) + (coupon?.restaurantSharePaise ?? 0);
-  const platformFunded = (restaurantOffer?.platformSharePaise ?? 0) + (coupon?.platformSharePaise ?? 0);
-  const totalDiscount = restaurantFunded + platformFunded;
-
-  const payable = bill - totalDiscount + serviceCharge + tip + fee;
+  const payable = due + fee;
 
   // Commission is a share of net sales: the bill after what the restaurant
-  // itself gave away. Service charge and tip are the staff's, not sales.
+  // itself gave away. Service charge and tip are the staff's, not sales. The
+  // deposit and wallet change who pays, not what the restaurant earns.
   const commissionBase = bill - restaurantFunded;
   const commission = Math.round((commissionBase * input.commissionBps) / 10_000);
   const commissionGst = pct(commission, GST_PERCENT);
@@ -241,25 +297,20 @@ export function priceBill(input: PriceBillInput): BillPricing {
     });
   }
   if (restaurantOffer) {
-    lines.push({
-      key: 'restaurant_offer',
-      label: restaurantOffer.title,
-      amountPaise: -restaurantOffer.discountPaise,
-      fundedBy: fundedBy(restaurantOffer),
-    });
+    lines.push({ key: 'restaurant_offer', label: restaurantOffer.title, amountPaise: -restaurantOffer.discountPaise, fundedBy: fundedBy(restaurantOffer) });
   }
   if (coupon) {
-    lines.push({
-      key: 'coupon',
-      label: coupon.code ? `${coupon.code} applied` : coupon.title,
-      amountPaise: -coupon.discountPaise,
-      fundedBy: fundedBy(coupon),
-    });
+    lines.push({ key: 'coupon', label: coupon.code ? `${coupon.code} applied` : coupon.title, amountPaise: -coupon.discountPaise, fundedBy: fundedBy(coupon) });
+  }
+  if (bankOffer) {
+    lines.push({ key: 'bank_offer', label: bankOffer.title, amountPaise: -bankOffer.discountPaise, fundedBy: fundedBy(bankOffer) });
   }
   if (serviceCharge > 0) {
     lines.push({ key: 'service_charge', label: `Service charge (${input.serviceChargePercent}%)`, amountPaise: serviceCharge, note: 'Optional · you chose to add it' });
   }
   if (tip > 0) lines.push({ key: 'tip', label: 'Tip for the staff', amountPaise: tip });
+  if (coverCredit > 0) lines.push({ key: 'cover_credit', label: 'Table deposit paid at booking', amountPaise: -coverCredit });
+  if (walletUsed > 0) lines.push({ key: 'wallet', label: 'Tixit Wallet', amountPaise: -walletUsed });
   if (fee > 0) lines.push({ key: 'fee', label: 'Platform fee (incl. GST)', amountPaise: fee });
 
   return {
@@ -270,13 +321,18 @@ export function priceBill(input: PriceBillInput): BillPricing {
     restaurantOffer,
     coupon,
     couponError,
+    bankOffer,
+    bankOfferError,
     serviceChargePaise: serviceCharge,
     tipPaise: tip,
+    coverCreditPaise: coverCredit,
+    walletUsedPaise: walletUsed,
     convenienceFeePaise: fee,
     convenienceFeeGstPaise: feeGst,
     totalDiscountPaise: totalDiscount,
     restaurantFundedDiscountPaise: restaurantFunded,
     platformFundedDiscountPaise: platformFunded,
+    bankFundedDiscountPaise: bankFunded,
     amountPayablePaise: payable,
     commissionBasePaise: commissionBase,
     commissionPaise: commission,

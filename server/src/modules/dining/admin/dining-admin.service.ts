@@ -2,8 +2,11 @@ import { z } from 'zod';
 import { query, queryOne, withTransaction } from '../../../db/pool';
 import { BadRequestError, ConflictError, NotFoundError } from '../../../utils/errors';
 import { readableCode, uniqueSlug } from '../../../utils/ids';
+import { OFFER_COLUMNS, toPublicOffer, type OfferRow } from '../offers/offer.service';
 import { rupeesToPaise } from '../../../utils/money';
 import { liabilityBalance, PLATFORM, post, restaurantPayable } from '../../finance/ledger';
+import { env } from '../../../config/env';
+import * as gateway from '../../../services/razorpay.provider';
 
 /* ─────────────────────── onboarding ─────────────────────── */
 
@@ -136,18 +139,27 @@ export async function addMember(restaurantId: string, email: string, role: 'owne
 
 export const settlementInput = z.object({
   amount: z.coerce.number().min(1),
+  /** Required for manual transfers; Route transfers carry their own id. */
   utr: z.string().trim().max(60).nullish(),
 });
 
 /**
- * Record a payout to a restaurant. It can never exceed what the ledger says
- * the platform owes, and it is posted, not just noted, so the balance moves.
+ * Pay a restaurant what it is owed. It can never exceed the ledger balance,
+ * and it is posted, not just noted, so the balance moves.
+ *
+ * With Razorpay Route enabled and a linked account on the restaurant, the
+ * money is sent as a Route transfer; otherwise the payout is recorded against
+ * a bank UTR from a manual transfer.
  */
 export async function recordSettlement(restaurantId: string, input: z.infer<typeof settlementInput>, adminId: string) {
   const amountPaise = rupeesToPaise(input.amount);
   return withTransaction(async (client) => {
     // Serialise settlements per restaurant so two admins cannot double-pay.
-    await client.query('SELECT 1 FROM dining.restaurants WHERE id = $1 FOR UPDATE', [restaurantId]);
+    const { rows: locked } = await client.query<{ razorpay_account_id: string | null; name: string }>(
+      'SELECT razorpay_account_id, name FROM dining.restaurants WHERE id = $1 FOR UPDATE',
+      [restaurantId],
+    );
+    if (!locked[0]) throw new NotFoundError('Restaurant');
     const payable = restaurantPayable(restaurantId);
     const balance = await liabilityBalance(payable.code, client);
     if (amountPaise > balance) {
@@ -155,10 +167,33 @@ export async function recordSettlement(restaurantId: string, input: z.infer<type
     }
 
     const reference = `STL-${readableCode(6)}`;
+    const viaRoute = env.razorpay.routeEnabled && Boolean(locked[0].razorpay_account_id);
+    if (!viaRoute && !input.utr) {
+      throw new BadRequestError('Enter the bank UTR for this manual transfer', 'UTR_REQUIRED');
+    }
+    // The transfer runs inside the lock so a retry can never send twice; if
+    // it fails, the transaction rolls back and nothing is recorded.
+    const transfer = viaRoute
+      ? await gateway.createTransfer({
+          account: locked[0].razorpay_account_id!,
+          amountPaise,
+          notes: { reference, restaurant: locked[0].name },
+        })
+      : null;
+
     const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO finance.settlements (reference, restaurant_id, amount_paise, utr, status, created_by)
-       VALUES ($1, $2, $3, $4, 'paid', $5) RETURNING id`,
-      [reference, restaurantId, amountPaise, input.utr ?? null, adminId],
+      `INSERT INTO finance.settlements (reference, restaurant_id, amount_paise, utr, status, created_by, method, razorpay_transfer_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [
+        reference,
+        restaurantId,
+        amountPaise,
+        input.utr ?? null,
+        transfer && transfer.status !== 'processed' ? 'processing' : 'paid',
+        adminId,
+        viaRoute ? 'route' : 'manual',
+        transfer?.id ?? null,
+      ],
     );
     const settlementId = rows[0]!.id;
     const transactionId = await post(client, {
@@ -166,14 +201,45 @@ export async function recordSettlement(restaurantId: string, input: z.infer<type
       sourceType: 'finance.settlement',
       sourceId: settlementId,
       idempotencyKey: `settlement:${settlementId}`,
-      memo: `${reference}${input.utr ? ` · UTR ${input.utr}` : ''}`,
+      memo: `${reference}${transfer ? ` · Route ${transfer.id}` : input.utr ? ` · UTR ${input.utr}` : ''}`,
       entries: [
         { account: payable, amountPaise },
         { account: PLATFORM.gatewayClearing, amountPaise: -amountPaise },
       ],
     });
     await client.query('UPDATE finance.settlements SET transaction_id = $2 WHERE id = $1', [settlementId, transactionId]);
-    return { reference, amountPaise };
+    return { reference, amountPaise, method: viaRoute ? 'route' : 'manual', transferId: transfer?.id ?? null };
+  });
+}
+
+/**
+ * Route webhooks: a processed transfer settles; a failed one is reversed so
+ * the restaurant is owed the money again.
+ */
+export async function onTransferEvent(transferId: string, outcome: 'processed' | 'failed', reason?: string): Promise<void> {
+  await withTransaction(async (client) => {
+    const { rows } = await client.query<{ id: string; restaurant_id: string; amount_paise: number; status: string }>(
+      `SELECT id, restaurant_id, amount_paise, status FROM finance.settlements WHERE razorpay_transfer_id = $1 FOR UPDATE`,
+      [transferId],
+    );
+    const settlement = rows[0];
+    if (!settlement || settlement.status === 'failed') return;
+    if (outcome === 'processed') {
+      await client.query(`UPDATE finance.settlements SET status = 'paid' WHERE id = $1`, [settlement.id]);
+      return;
+    }
+    await client.query(`UPDATE finance.settlements SET status = 'failed', failure_reason = $2 WHERE id = $1`, [settlement.id, reason ?? null]);
+    await post(client, {
+      kind: 'settlement_reversed',
+      sourceType: 'finance.settlement',
+      sourceId: settlement.id,
+      idempotencyKey: `settlement_reversed:${settlement.id}`,
+      memo: reason ?? 'Route transfer failed',
+      entries: [
+        { account: PLATFORM.gatewayClearing, amountPaise: Number(settlement.amount_paise) },
+        { account: restaurantPayable(settlement.restaurant_id), amountPaise: -Number(settlement.amount_paise) },
+      ],
+    });
   });
 }
 
@@ -194,9 +260,10 @@ export async function getRestaurantForAdmin(id: string) {
     cover_url: string | null;
     city: string;
     created_at: Date;
+    razorpay_account_id: string | null;
   }>(
     `SELECT r.id, r.slug, r.name, r.locality, r.address, r.status, r.commission_bps, r.service_charge_percent,
-            r.gstin, r.fssai, r.cover_url, c.name AS city, r.created_at
+            r.gstin, r.fssai, r.cover_url, c.name AS city, r.created_at, r.razorpay_account_id
        FROM dining.restaurants r JOIN cities c ON c.id = r.city_id WHERE r.id = $1`,
     [id],
   );
@@ -233,6 +300,9 @@ export async function getRestaurantForAdmin(id: string) {
     serviceChargePercent: Number(row.service_charge_percent),
     gstin: row.gstin,
     fssai: row.fssai,
+    razorpayAccountId: row.razorpay_account_id,
+    /** Payouts go out as Route transfers when this is true. */
+    routePayouts: env.razorpay.routeEnabled && Boolean(row.razorpay_account_id),
     createdAt: row.created_at,
     payableBalancePaise: balance,
     lifetime: {
@@ -249,6 +319,7 @@ export const commercialsInput = z.object({
   serviceChargePercent: z.coerce.number().min(0).max(20).optional(),
   gstin: z.string().trim().max(20).nullish(),
   fssai: z.string().trim().max(20).nullish(),
+  razorpayAccountId: z.string().trim().regex(/^acc_[A-Za-z0-9]{6,}$/, 'Linked account ids look like acc_XXXXXXXX').nullish(),
 });
 
 /**
@@ -261,7 +332,8 @@ export async function updateCommercials(id: string, input: z.infer<typeof commer
        commission_bps = COALESCE($2, commission_bps),
        service_charge_percent = COALESCE($3, service_charge_percent),
        gstin = CASE WHEN $4::boolean THEN $5 ELSE gstin END,
-       fssai = CASE WHEN $6::boolean THEN $7 ELSE fssai END
+       fssai = CASE WHEN $6::boolean THEN $7 ELSE fssai END,
+       razorpay_account_id = CASE WHEN $8::boolean THEN $9 ELSE razorpay_account_id END
      WHERE id = $1`,
     [
       id,
@@ -271,6 +343,8 @@ export async function updateCommercials(id: string, input: z.infer<typeof commer
       input.gstin ?? null,
       input.fssai !== undefined,
       input.fssai ?? null,
+      input.razorpayAccountId !== undefined,
+      input.razorpayAccountId ?? null,
     ],
   );
   if (!rowCount) throw new NotFoundError('Restaurant');
@@ -291,4 +365,73 @@ export async function removeMember(restaurantId: string, userId: string) {
     throw new ConflictError('A restaurant must keep at least one owner', 'LAST_OWNER');
   }
   await query('DELETE FROM dining.restaurant_members WHERE restaurant_id = $1 AND user_id = $2', [restaurantId, userId]);
+}
+
+/* ─────────────────────── platform & bank offers ─────────────────────── */
+
+export const platformOfferInput = z
+  .object({
+    owner: z.enum(['platform', 'bank']),
+    code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{3,20}$/, 'Codes are 3–20 letters or digits').nullish(),
+    bankName: z.string().trim().min(2).max(40).nullish(),
+    paymentMethods: z.array(z.enum(['credit_card', 'debit_card', 'upi', 'netbanking'])).default([]),
+    title: z.string().trim().min(3).max(80),
+    kind: z.enum(['percent', 'flat']),
+    percentOff: z.coerce.number().min(1).max(100).nullish(),
+    flatOff: z.coerce.number().min(1).max(100_000).nullish(),
+    maxDiscount: z.coerce.number().min(1).max(100_000).nullish(),
+    minBill: z.coerce.number().min(0).max(1_000_000).default(0),
+    perUserLimit: z.coerce.number().int().min(1).max(100).nullish(),
+    restaurantFundedPct: z.coerce.number().int().min(0).max(100).default(0),
+    validUntil: z.string().datetime({ offset: true }).nullish(),
+    terms: z.string().trim().max(500).nullish(),
+  })
+  .refine((v) => (v.kind === 'percent' ? Boolean(v.percentOff) : Boolean(v.flatOff)), { message: 'Enter how much it takes off', path: ['percentOff'] })
+  .refine((v) => v.owner !== 'platform' || Boolean(v.code), { message: 'A Tixit offer needs a code', path: ['code'] })
+  .refine((v) => v.owner !== 'bank' || Boolean(v.bankName), { message: 'Name the bank funding the offer', path: ['bankName'] });
+
+export async function listPlatformOffers() {
+  const { rows } = await query<OfferRow & { redemptions: number; discount: number }>(
+    `SELECT ${OFFER_COLUMNS},
+            (SELECT count(*)::int FROM dining.offer_redemptions x WHERE x.offer_id = o.id) AS redemptions,
+            (SELECT COALESCE(sum(discount_paise), 0)::bigint FROM dining.offer_redemptions x WHERE x.offer_id = o.id) AS discount
+       FROM dining.offers o WHERE o.owner IN ('platform', 'bank') AND o.status <> 'archived'
+      ORDER BY o.owner, o.created_at DESC`,
+  );
+  return rows.map((row) => ({ ...toPublicOffer(row), redemptions: row.redemptions, discountGivenPaise: Number(row.discount) }));
+}
+
+export async function createPlatformOffer(input: z.infer<typeof platformOfferInput>, adminId: string) {
+  const row = await queryOne<OfferRow>(
+    `INSERT INTO dining.offers AS o (owner, code, bank_name, payment_methods, title, kind, percent_off, flat_off_paise,
+       max_discount_paise, min_bill_paise, per_user_limit, restaurant_funded_pct, valid_until, terms, applies_to, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'both', $15)
+     RETURNING ${OFFER_COLUMNS}`,
+    [
+      input.owner,
+      input.code ?? null,
+      input.owner === 'bank' ? input.bankName : null,
+      input.paymentMethods,
+      input.title,
+      input.kind,
+      input.kind === 'percent' ? input.percentOff : null,
+      input.kind === 'flat' ? rupeesToPaise(input.flatOff!) : null,
+      input.maxDiscount ? rupeesToPaise(input.maxDiscount) : null,
+      rupeesToPaise(input.minBill),
+      input.perUserLimit ?? null,
+      input.restaurantFundedPct,
+      input.validUntil ?? null,
+      input.terms ?? null,
+      adminId,
+    ],
+  ).catch((err: { code?: string }) => {
+    if (err.code === '23505') throw new ConflictError('That code is already in use', 'CODE_TAKEN');
+    throw err;
+  });
+  return toPublicOffer(row!);
+}
+
+export async function setPlatformOfferStatus(id: string, status: 'active' | 'paused' | 'archived') {
+  const { rowCount } = await query(`UPDATE dining.offers SET status = $2 WHERE id = $1 AND owner IN ('platform', 'bank')`, [id, status]);
+  if (!rowCount) throw new NotFoundError('Offer');
 }

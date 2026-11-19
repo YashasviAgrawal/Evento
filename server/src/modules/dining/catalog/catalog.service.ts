@@ -319,9 +319,10 @@ export async function getRestaurant(slug: string) {
       address: string;
       phone: string | null;
       service_charge_percent: string | number;
+      cover_charge_paise: number;
     }
   >(
-    `SELECT x.*, r2.description, r2.address, r2.phone, r2.service_charge_percent
+    `SELECT x.*, r2.description, r2.address, r2.phone, r2.service_charge_percent, r2.cover_charge_paise
        FROM (${CARD_SELECT} WHERE r.slug = $1 AND r.status IN ('live', 'paused')) x
        JOIN dining.restaurants r2 ON r2.id = x.id`,
     [slug],
@@ -364,6 +365,8 @@ export async function getRestaurant(slug: string) {
     hours: row.hours,
     opensAt: state.opensAt,
     serviceChargePercent: Number(row.service_charge_percent),
+    /** Per-guest table deposit, credited to the bill when paid on Tixit. 0 = free booking. */
+    coverChargePerGuestPaise: Number(row.cover_charge_paise),
     timezone: DINING_TZ,
     gallery: media.rows.map((m) => ({ kind: m.kind, url: m.url, caption: m.caption })),
     offers: offers.rows.map(toPublicOffer),

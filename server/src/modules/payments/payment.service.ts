@@ -278,6 +278,19 @@ export async function handleWebhook(eventId: string, body: WebhookEnvelope): Pro
         }
         break;
       }
+      case 'transfer.processed':
+      case 'transfer.failed': {
+        const entity = (body.payload as { transfer?: { entity?: Record<string, unknown> } } | undefined)?.transfer?.entity ?? {};
+        const transferId = String(entity.id ?? '');
+        if (transferId) {
+          await transferEventHandler?.(
+            transferId,
+            eventType === 'transfer.processed' ? 'processed' : 'failed',
+            String((entity.error as { description?: string } | undefined)?.description ?? ''),
+          );
+        }
+        break;
+      }
       case 'refund.processed': {
         const entity = body.payload?.refund?.entity ?? {};
         await handleRefundProcessed(entity);
@@ -299,6 +312,14 @@ export async function handleWebhook(eventId: string, body: WebhookEnvelope): Pro
   }
 }
 
+type TransferEventHandler = (transferId: string, outcome: 'processed' | 'failed', reason?: string) => Promise<void>;
+let transferEventHandler: TransferEventHandler | null = null;
+
+/** Route transfers belong to dine-in settlements, which register their handler here. */
+export function onTransferEvent(handler: TransferEventHandler): void {
+  transferEventHandler = handler;
+}
+
 async function handlePaymentCaptured(entity: Record<string, unknown>): Promise<void> {
   const orderId = String(entity.order_id ?? '');
   const paymentId = String(entity.id ?? '');
@@ -308,9 +329,10 @@ async function handlePaymentCaptured(entity: Record<string, unknown>): Promise<v
     id: string;
     booking_id: string | null;
     bill_payment_id: string | null;
+    reservation_id: string | null;
     status: string;
     amount_paise: number;
-  }>('SELECT id, booking_id, bill_payment_id, status, amount_paise FROM payments WHERE provider_order_id = $1', [orderId]);
+  }>('SELECT id, booking_id, bill_payment_id, reservation_id, status, amount_paise FROM payments WHERE provider_order_id = $1', [orderId]);
   if (!payment) {
     logger.warn({ orderId }, 'Webhook referenced an unknown order');
     return;
@@ -327,6 +349,10 @@ async function handlePaymentCaptured(entity: Record<string, unknown>): Promise<v
 
   if (payment.bill_payment_id) {
     await paymentSubjectHandler('bill_payment').captured(payment.bill_payment_id, { method, paymentId });
+    return;
+  }
+  if (payment.reservation_id) {
+    await paymentSubjectHandler('reservation').captured(payment.reservation_id, { method, paymentId });
     return;
   }
   if (!payment.booking_id) return;

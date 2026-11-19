@@ -159,3 +159,30 @@ export function normaliseMethod(method: unknown): string {
       return 'unknown';
   }
 }
+
+/**
+ * Razorpay Route: move money from the platform balance to a restaurant's
+ * linked account (`acc_…`). Mock mode returns a processed transfer so the
+ * settlement path runs end to end without credentials.
+ */
+export async function createTransfer(input: {
+  account: string;
+  amountPaise: number;
+  notes?: Record<string, string>;
+}): Promise<{ id: string; status: string }> {
+  if (!client) {
+    return { id: `trf_mock_${crypto.randomBytes(8).toString('hex')}`, status: 'processed' };
+  }
+  try {
+    const transfer = await client.transfers.create({
+      account: input.account,
+      amount: input.amountPaise,
+      currency: env.razorpay.currency,
+      notes: input.notes,
+    });
+    return { id: transfer.id, status: String((transfer as unknown as { status?: string }).status ?? 'pending') };
+  } catch (err) {
+    logger.error({ err, account: input.account }, 'Razorpay transfer failed');
+    throw new ServiceUnavailableError('The payout could not be sent through Razorpay Route');
+  }
+}

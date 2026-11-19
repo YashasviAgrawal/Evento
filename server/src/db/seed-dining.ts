@@ -11,6 +11,7 @@ import { toEngineOffer, activeRestaurantOffers } from '../modules/dining/offers/
 import { newVerifySecret } from '../modules/dining/bills/verification';
 import { markBillPaid } from '../modules/dining/bills/bill.service';
 import { toLocalMoment } from '../modules/dining/time';
+import { PLATFORM, post } from '../modules/finance/ledger';
 
 const img = (id: string, w = 1200) => `https://images.unsplash.com/${id}?w=${w}&q=75&auto=format&fit=crop`;
 
@@ -424,7 +425,43 @@ export async function seedDining(users: { adminId: string; customerIds: string[]
              'Up to ₹250 off. Once per diner.')`,
   );
 
+  // Bank instant discounts, funded by the bank on its own cards and UPI.
+  await query(
+    `INSERT INTO dining.offers (owner, bank_name, payment_methods, title, kind, percent_off, flat_off_paise, max_discount_paise,
+                                min_bill_paise, applies_to, per_user_limit, restaurant_funded_pct, terms)
+     VALUES ('bank', 'HDFC Bank', '{credit_card}', 'HDFC credit cards: 10% off', 'percent', 10, NULL, 20000, 100000, 'both', 2, 0,
+             'Up to ₹200 on bills of ₹1,000 or more. Twice a month per card.'),
+            ('bank', 'ICICI Bank', '{upi,debit_card}', 'ICICI UPI & debit: ₹125 off', 'flat', NULL, 12500, NULL, 120000, 'both', NULL, 0,
+             'On bills of ₹1,200 or more.')`,
+  );
+
+  // A peak-time table deposit at the rooftop: ₹250 a guest, credited to the bill.
+  await query(`UPDATE dining.restaurants SET cover_charge_paise = 25000 WHERE id = $1`, [restaurantIds[1]]);
+
   await seedHistory(restaurantIds.slice(0, 6), users.customerIds);
+
+  // A little spendable cashback for the demo diner, through the real ledger.
+  const diner = await queryOne<{ id: string }>(`SELECT id FROM users WHERE email = 'diya@example.com'`);
+  if (diner) {
+    await withTransaction(async (client) => {
+      const { rows } = await client.query<{ id: string }>(
+        `INSERT INTO finance.wallet_credits (user_id, source_type, source_id, amount_paise, remaining_paise, status, available_at, expires_at)
+         VALUES ($1, 'adjustment', gen_random_uuid(), 15000, 15000, 'available', now(), now() + interval '60 days') RETURNING id`,
+        [diner.id],
+      );
+      await post(client, {
+        kind: 'cashback_released',
+        sourceType: 'finance.wallet_credit',
+        sourceId: rows[0]!.id,
+        idempotencyKey: `cashback_released:${rows[0]!.id}`,
+        memo: 'Welcome cashback',
+        entries: [
+          { account: PLATFORM.cashbackExpense, amountPaise: 15000 },
+          { account: PLATFORM.walletLiability, amountPaise: -15000 },
+        ],
+      });
+    });
+  }
 }
 
 /** "23:00" minus 60 minutes → "22:00" */

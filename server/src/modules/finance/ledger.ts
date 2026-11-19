@@ -26,7 +26,18 @@ export const PLATFORM = {
   feeRevenue: { code: 'platform:fee_revenue', name: 'Platform fee revenue', kind: 'revenue', ownerType: 'platform' },
   commissionRevenue: { code: 'platform:commission_revenue', name: 'Commission revenue', kind: 'revenue', ownerType: 'platform' },
   gstOutput: { code: 'tax:gst_output', name: 'GST output payable', kind: 'liability', ownerType: 'tax' },
+  /** Cashback diners have earned and not yet spent. */
+  walletLiability: { code: 'platform:wallet_liability', name: 'Tixit Wallet balances', kind: 'liability', ownerType: 'platform' },
+  cashbackExpense: { code: 'platform:cashback_expense', name: 'Cashback (net of expiry)', kind: 'expense', ownerType: 'platform' },
+  /** Cover charges paid at booking, held until credited, refunded or forfeited. */
+  coverDeposits: { code: 'platform:cover_deposits', name: 'Table deposits held', kind: 'liability', ownerType: 'platform' },
 } as const satisfies Record<string, AccountSpec>;
+
+/** What a bank owes us for instant discounts it funds on its cards. */
+export function bankReceivable(bankName: string): AccountSpec {
+  const slug = bankName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return { code: `bank:${slug}:receivable`, name: `${bankName} — offer receivable`, kind: 'asset', ownerType: 'bank' };
+}
 
 export function restaurantPayable(restaurantId: string, name = 'Restaurant'): AccountSpec {
   return {

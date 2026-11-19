@@ -1,3 +1,4 @@
+import { normalizeIndianMobile, sendOtpSms } from '../../services/sms.service';
 import bcrypt from 'bcryptjs';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
@@ -656,3 +657,38 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
 
 export { USER_SELECT };
 export type { UserRow };
+
+/* ─────────────────────────── phone sign-in ─────────────────────────── */
+
+const phoneIdentifier = (mobile: string) => `phone:${mobile}`;
+
+/**
+ * Text a sign-in code to the mobile number on an account. Phone sign-in is
+ * for existing accounts — creating one still needs a verified email, which is
+ * what receipts and tickets are sent to.
+ */
+export async function requestPhoneOtp(phone: string): Promise<{ sent: boolean; devOtp?: string }> {
+  const mobile = normalizeIndianMobile(phone);
+  if (!mobile) throw new BadRequestError('Enter a 10-digit Indian mobile number', 'PHONE_INVALID');
+  const account = await queryOne<{ id: string; status: string }>(
+    `SELECT id, status FROM users WHERE phone = $1 OR phone = $2 LIMIT 1`,
+    [mobile, `+91${mobile}`],
+  );
+  if (!account || account.status === 'deleted') {
+    throw new UnauthorizedError('No Tixit account uses this number yet — sign up with email, then add your phone.', 'PHONE_NOT_REGISTERED');
+  }
+  if (account.status === 'suspended') throw new ForbiddenError('This account has been suspended', 'ACCOUNT_SUSPENDED');
+  const code = await issueOtp(phoneIdentifier(mobile), 'login');
+  await sendOtpSms(mobile, code);
+  return { sent: true, ...(env.otp.devEcho ? { devOtp: code } : {}) };
+}
+
+export async function verifyPhoneOtp(phone: string, code: string): Promise<UserRow> {
+  const mobile = normalizeIndianMobile(phone);
+  if (!mobile) throw new BadRequestError('Enter a 10-digit Indian mobile number', 'PHONE_INVALID');
+  await verifyOtp(phoneIdentifier(mobile), 'login', code);
+  const row = await queryOne<UserRow>(`${USER_SELECT} WHERE (u.phone = $1 OR u.phone = $2) AND u.status = 'active'`, [mobile, `+91${mobile}`]);
+  if (!row) throw new UnauthorizedError('This account is no longer available', 'ACCOUNT_INACTIVE');
+  await query('UPDATE users SET phone_verified_at = COALESCE(phone_verified_at, now()) WHERE id = $1', [row.id]);
+  return row;
+}

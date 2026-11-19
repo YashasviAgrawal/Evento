@@ -8,7 +8,8 @@ import type { EngineOffer } from './engine';
 
 export const OFFER_COLUMNS = `o.id, o.owner, o.restaurant_id, o.code, o.title, o.description, o.kind, o.percent_off,
   o.flat_off_paise, o.max_discount_paise, o.min_bill_paise, o.applies_to, o.days, o.start_time::text AS start_time,
-  o.end_time::text AS end_time, o.valid_from, o.valid_until, o.per_user_limit, o.restaurant_funded_pct, o.terms, o.status`;
+  o.end_time::text AS end_time, o.valid_from, o.valid_until, o.per_user_limit, o.restaurant_funded_pct, o.terms, o.status,
+  o.bank_name, o.payment_methods`;
 
 export interface OfferRow {
   id: string;
@@ -32,6 +33,8 @@ export interface OfferRow {
   restaurant_funded_pct: number;
   terms: string | null;
   status: 'draft' | 'active' | 'paused' | 'archived';
+  bank_name?: string | null;
+  payment_methods?: string[];
 }
 
 export function toEngineOffer(row: OfferRow): EngineOffer {
@@ -53,6 +56,7 @@ export function toEngineOffer(row: OfferRow): EngineOffer {
     validUntil: row.valid_until,
     perUserLimit: row.per_user_limit,
     restaurantFundedPct: row.restaurant_funded_pct,
+    bankName: row.bank_name ?? null,
   };
 }
 
@@ -111,6 +115,8 @@ export function toPublicOffer(row: OfferRow) {
     restaurantFundedPct: row.restaurant_funded_pct,
     terms: row.terms,
     status: row.status,
+    bankName: row.bank_name ?? null,
+    paymentMethods: row.payment_methods ?? [],
   };
 }
 export type PublicOffer = ReturnType<typeof toPublicOffer>;
@@ -138,6 +144,18 @@ export async function findCoupon(code: string, restaurantId: string, client: Que
     [code.trim(), restaurantId],
   );
   return rows[0] ?? null;
+}
+
+/** Bank instant-discount offers usable at this restaurant (platform-wide or its own). */
+export async function bankOffersFor(restaurantId: string, client: Queryable = { query }): Promise<OfferRow[]> {
+  const { rows } = await client.query<OfferRow>(
+    `SELECT ${OFFER_COLUMNS} FROM dining.offers o
+      WHERE o.owner = 'bank' AND o.status = 'active' AND (o.restaurant_id IS NULL OR o.restaurant_id = $1)
+        AND (o.valid_until IS NULL OR o.valid_until > now())
+      ORDER BY o.percent_off DESC NULLS LAST, o.flat_off_paise DESC NULLS LAST`,
+    [restaurantId],
+  );
+  return rows;
 }
 
 /** How often this diner has redeemed each offer on a paid bill. */

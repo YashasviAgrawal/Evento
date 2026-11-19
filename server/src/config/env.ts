@@ -120,6 +120,8 @@ export const env = {
     keyId: optional('RAZORPAY_KEY_ID'),
     keySecret: optional('RAZORPAY_KEY_SECRET'),
     webhookSecret: optional('RAZORPAY_WEBHOOK_SECRET'),
+    /** Pay restaurants through Razorpay Route transfers to their linked accounts. */
+    routeEnabled: bool('RAZORPAY_ROUTE_ENABLED', false),
     currency: str('CURRENCY', 'INR'),
     get enabled(): boolean {
       return Boolean(optional('RAZORPAY_KEY_ID') && optional('RAZORPAY_KEY_SECRET'));
@@ -134,6 +136,19 @@ export const env = {
     clientId: optional('GOOGLE_CLIENT_ID'),
     get enabled(): boolean {
       return Boolean(optional('GOOGLE_CLIENT_ID'));
+    },
+  },
+
+  /**
+   * SMS for phone sign-in. MSG91's Flow API with a DLT-registered template
+   * whose variable is the code. Without keys, codes are logged instead of sent
+   * (development), mirroring the console mail transport.
+   */
+  sms: {
+    msg91AuthKey: optional('MSG91_AUTH_KEY'),
+    msg91OtpTemplateId: optional('MSG91_OTP_TEMPLATE_ID'),
+    get enabled(): boolean {
+      return Boolean(optional('MSG91_AUTH_KEY') && optional('MSG91_OTP_TEMPLATE_ID'));
     },
   },
 

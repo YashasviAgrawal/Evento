@@ -62,7 +62,14 @@ export const otpLimiter = build({
   limit: 5,
   message: 'Too many OTP requests. Please wait before requesting another code.',
   keyGenerator: (req: Request) => {
-    const identifier = typeof req.body?.email === 'string' ? req.body.email.toLowerCase() : req.ip;
+    // Keyed by the address being messaged, so one inbox or phone cannot be
+    // flooded from many IPs, and one IP cannot lock out others.
+    const identifier =
+      typeof req.body?.email === 'string'
+        ? req.body.email.toLowerCase()
+        : typeof req.body?.phone === 'string'
+          ? `phone:${req.body.phone.replace(/\D/g, '').slice(-10)}`
+          : req.ip;
     return `otp:${identifier}`;
   },
 });

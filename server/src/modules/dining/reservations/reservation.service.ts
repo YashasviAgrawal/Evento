@@ -4,7 +4,11 @@ import { readableCode } from '../../../utils/ids';
 import { DINING_TZ, toLocalMoment } from '../time';
 import { activeRestaurantOffers, toEngineOffer } from '../offers/offer.service';
 import { bestPrebookOffer, offerHeadline } from './availability.service';
-import { notifyReservation } from '../notifications';
+import { kickOutbox } from '../../platform/outbox';
+import { queueReservationEmail } from '../notifications';
+import { FREE_CANCELLATION_HOURS, forfeitCover, queueCoverRefund } from './cover.service';
+import { getSettings } from '../../../services/settings.service';
+import type { PoolClient } from 'pg';
 
 /**
  * Reservations.
@@ -26,8 +30,8 @@ export type ReservationStatus =
   | 'no_show'
   | 'expired';
 
-/** Statuses that still occupy covers in a slot. */
-const HOLDING: ReservationStatus[] = ['placed', 'confirmed', 'seated'];
+/** Statuses that still occupy covers in a slot (pending_payment as a hold). */
+const HOLDING: ReservationStatus[] = ['pending_payment', 'placed', 'confirmed', 'seated'];
 
 /**
  * Every legal partner-side transition. Anything not listed is rejected, so a
@@ -75,6 +79,9 @@ interface ReservationRow {
   seated_at: Date | null;
   cancelled_at: Date | null;
   cancel_reason: string | null;
+  cover_paise: number;
+  cover_status: 'none' | 'pending' | 'paid' | 'credited' | 'refunded' | 'forfeited';
+  hold_expires_at: Date | null;
 }
 
 const RESERVATION_SELECT = `
@@ -82,7 +89,7 @@ const RESERVATION_SELECT = `
          r.locality AS restaurant_locality, r.address AS restaurant_address, r.cover_url AS restaurant_cover,
          r.phone AS restaurant_phone, r.lat, r.lng, v.starts_at, v.party_size, v.status, v.offer_snapshot,
          v.occasion, v.notes, v.guest_name, v.guest_phone, v.created_at, v.accepted_at, v.seated_at,
-         v.cancelled_at, v.cancel_reason
+         v.cancelled_at, v.cancel_reason, v.cover_paise, v.cover_status, v.hold_expires_at
     FROM dining.reservations v
     JOIN dining.restaurants r ON r.id = v.restaurant_id`;
 
@@ -111,6 +118,16 @@ function toReservation(row: ReservationRow) {
       lng: Number(row.lng),
     },
     canCancel: HOLDING.includes(row.status) && row.status !== 'seated' && row.starts_at.getTime() > Date.now(),
+    deposit:
+      Number(row.cover_paise) > 0
+        ? {
+            amountPaise: Number(row.cover_paise),
+            status: row.cover_status,
+            holdExpiresAt: row.hold_expires_at,
+            /** Cancelling now would refund the deposit. */
+            refundableNow: row.starts_at.getTime() - Date.now() >= FREE_CANCELLATION_HOURS * 3600_000,
+          }
+        : null,
     createdAt: row.created_at,
     acceptedAt: row.accepted_at,
     seatedAt: row.seated_at,
@@ -137,9 +154,10 @@ export async function createReservation(
       status: string;
       booking_enabled: boolean;
       auto_accept: boolean;
+      cover_charge_paise: number;
     }>(
       `SELECT s.id, s.restaurant_id, s.starts_at, s.capacity, s.held, s.booked, s.max_party, s.is_blocked,
-              r.status, r.booking_enabled, r.auto_accept
+              r.status, r.booking_enabled, r.auto_accept, r.cover_charge_paise
          FROM dining.slots s JOIN dining.restaurants r ON r.id = s.restaurant_id
         WHERE s.id = $1
           FOR UPDATE OF s`,
@@ -175,12 +193,19 @@ export async function createReservation(
     const offers = (await activeRestaurantOffers(slot.restaurant_id, client)).map(toEngineOffer);
     const offer = bestPrebookOffer(offers, toLocalMoment(slot.starts_at));
 
+    // A deposit turns the booking into a short hold until it is paid.
+    const cover = Number(slot.cover_charge_paise) * input.partySize;
+    const holdMinutes = Number((await getSettings(client)).booking_hold_minutes);
+    const status: ReservationStatus = cover > 0 ? 'pending_payment' : slot.auto_accept ? 'confirmed' : 'placed';
+
     const phone = await client.query<{ phone: string | null }>('SELECT phone FROM users WHERE id = $1', [user.id]);
     const { rows: created } = await client.query<{ id: string }>(
       `INSERT INTO dining.reservations (code, user_id, restaurant_id, slot_id, starts_at, party_size, status, offer_id,
-                                        offer_snapshot, occasion, notes, guest_name, guest_phone, accepted_at)
+                                        offer_snapshot, occasion, notes, guest_name, guest_phone, accepted_at,
+                                        cover_paise, cover_status, hold_expires_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7::dining.reservation_status, $8, $9, $10, $11, $12, $13,
-               CASE WHEN $7::dining.reservation_status = 'confirmed' THEN now() END)
+               CASE WHEN $7::dining.reservation_status = 'confirmed' THEN now() END,
+               $14::bigint, $15::dining.cover_status, CASE WHEN $14::bigint > 0 THEN now() + make_interval(mins => $16::int) END)
        RETURNING id`,
       [
         `DIN-${readableCode(6)}`,
@@ -189,22 +214,30 @@ export async function createReservation(
         slot.id,
         slot.starts_at,
         input.partySize,
-        slot.auto_accept ? 'confirmed' : 'placed',
+        status,
         offer?.id ?? null,
         offer ? JSON.stringify({ ...offer, headline: offerHeadline(offer) }) : null,
         input.occasion ?? null,
         input.notes ?? null,
         user.fullName,
         phone.rows[0]?.phone ?? null,
+        cover,
+        cover > 0 ? 'pending' : 'none',
+        holdMinutes,
       ],
     );
-    await client.query('UPDATE dining.slots SET booked = booked + $2 WHERE id = $1', [slot.id, input.partySize]);
-    return created[0]!.id;
+    const id = created[0]!.id;
+    if (cover > 0) {
+      await client.query('UPDATE dining.slots SET held = held + $2 WHERE id = $1', [slot.id, input.partySize]);
+    } else {
+      await client.query('UPDATE dining.slots SET booked = booked + $2 WHERE id = $1', [slot.id, input.partySize]);
+      await queueReservationEmail(client, id, status === 'confirmed' ? 'confirmed' : 'requested');
+    }
+    return id;
   });
 
-  const reservation = await getReservationById(reservationId);
-  notifyReservation(reservationId, reservation.status === 'confirmed' ? 'confirmed' : 'requested');
-  return reservation;
+  kickOutbox();
+  return getReservationById(reservationId);
 }
 
 async function getReservationById(id: string): Promise<ReservationView> {
@@ -231,16 +264,29 @@ export async function listReservationsForUser(userId: string): Promise<Reservati
   return rows.map(toReservation);
 }
 
-/** Move a reservation to `to`, releasing covers when it stops holding a table. */
+interface TransitionRow {
+  id: string;
+  slot_id: string;
+  party_size: number;
+  status: ReservationStatus;
+  starts_at: Date;
+  cover_status: string;
+}
+
+/**
+ * Move a reservation to `to`, releasing covers when it stops holding a table.
+ * `effects` runs in the same transaction for deposit handling and emails.
+ */
 async function transition(
   where: { code: string; userId?: string; restaurantId?: string },
   from: readonly ReservationStatus[],
   to: ReservationStatus,
   extra: { reason?: string | null } = {},
+  effects?: (client: PoolClient, row: TransitionRow) => Promise<void>,
 ): Promise<string> {
-  return withTransaction(async (client) => {
-    const { rows } = await client.query<{ id: string; slot_id: string; party_size: number; status: ReservationStatus }>(
-      `SELECT id, slot_id, party_size, status FROM dining.reservations
+  const id = await withTransaction(async (client) => {
+    const { rows } = await client.query<TransitionRow>(
+      `SELECT id, slot_id, party_size, status, starts_at, cover_status FROM dining.reservations
         WHERE code = $1 AND ($2::uuid IS NULL OR user_id = $2) AND ($3::uuid IS NULL OR restaurant_id = $3)
           FOR UPDATE`,
       [where.code, where.userId ?? null, where.restaurantId ?? null],
@@ -260,25 +306,39 @@ async function transition(
     };
     const column = stamp[to];
     await client.query(
-      `UPDATE dining.reservations SET status = $2, cancel_reason = COALESCE($3, cancel_reason)
+      `UPDATE dining.reservations SET status = $2, cancel_reason = COALESCE($3, cancel_reason), hold_expires_at = NULL
               ${column ? `, ${column} = now()` : ''}
         WHERE id = $1`,
       [row.id, to, extra.reason ?? null],
     );
 
-    // A cancelled or declined table frees its covers for someone else.
-    if (HOLDING.includes(row.status) && (to === 'cancelled_by_diner' || to === 'cancelled_by_restaurant')) {
-      await client.query('UPDATE dining.slots SET booked = GREATEST(booked - $2, 0) WHERE id = $1', [row.slot_id, row.party_size]);
+    // A cancelled, declined or lapsed table frees its covers for someone else.
+    if (HOLDING.includes(row.status) && ['cancelled_by_diner', 'cancelled_by_restaurant', 'expired'].includes(to)) {
+      const column = row.status === 'pending_payment' ? 'held' : 'booked';
+      await client.query(`UPDATE dining.slots SET ${column} = GREATEST(${column} - $2, 0) WHERE id = $1`, [row.slot_id, row.party_size]);
     }
+    await effects?.(client, row);
     return row.id;
   });
+  kickOutbox();
+  return id;
 }
 
+/**
+ * Diner cancels. A paid deposit comes back if they cancel at least
+ * FREE_CANCELLATION_HOURS ahead; later than that, the restaurant keeps it.
+ */
 export async function cancelByDiner(code: string, userId: string, reason?: string | null): Promise<ReservationView> {
   const current = await getReservationForUser(code, userId);
   if (!current.canCancel) throw new ConflictError('This reservation can no longer be cancelled', 'CANNOT_CANCEL');
-  const id = await transition({ code, userId }, ['placed', 'confirmed'], 'cancelled_by_diner', { reason });
-  notifyReservation(id, 'cancelled');
+  const id = await transition({ code, userId }, ['pending_payment', 'placed', 'confirmed'], 'cancelled_by_diner', { reason }, async (client, row) => {
+    if (row.cover_status === 'paid') {
+      const early = row.starts_at.getTime() - Date.now() >= FREE_CANCELLATION_HOURS * 3600_000;
+      if (early) await queueCoverRefund(client, row.id);
+      else await forfeitCover(client, row.id);
+    }
+    if (row.status !== 'pending_payment') await queueReservationEmail(client, row.id, 'cancelled');
+  });
   return getReservationById(id);
 }
 
@@ -289,10 +349,33 @@ export async function partnerTransition(
   reason?: string | null,
 ): Promise<ReservationView> {
   const rule = PARTNER_TRANSITIONS[action];
-  const id = await transition({ code, restaurantId }, rule.from, rule.to, { reason });
-  if (action === 'accept') notifyReservation(id, 'accepted');
-  if (action === 'decline') notifyReservation(id, 'declined');
+  const id = await transition({ code, restaurantId }, rule.from, rule.to, { reason }, async (client, row) => {
+    if (action === 'accept') await queueReservationEmail(client, row.id, 'accepted');
+    if (action === 'decline') {
+      // A table the restaurant turned down is never the diner's cost.
+      if (row.cover_status === 'paid') await queueCoverRefund(client, row.id);
+      await queueReservationEmail(client, row.id, 'declined');
+    }
+    if (action === 'no_show' && row.cover_status === 'paid') await forfeitCover(client, row.id);
+  });
   return getReservationById(id);
+}
+
+/** Deposit holds that were never paid release their covers. */
+export async function expireUnpaidHolds(): Promise<number> {
+  const { rows } = await query<{ code: string }>(
+    `SELECT code FROM dining.reservations WHERE status = 'pending_payment' AND hold_expires_at < now() LIMIT 200`,
+  );
+  let expired = 0;
+  for (const row of rows) {
+    try {
+      await transition({ code: row.code }, ['pending_payment'], 'expired');
+      expired += 1;
+    } catch {
+      // Paid at the last second, or already handled — nothing to release.
+    }
+  }
+  return expired;
 }
 
 /** A restaurant's reservations for one local day, in seating order. */

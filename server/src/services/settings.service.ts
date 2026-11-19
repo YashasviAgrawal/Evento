@@ -22,6 +22,13 @@ export interface PlatformSettings {
   dining_auto_verify_hours: number;
   /** How many days ahead diners can book a table. */
   dining_slot_horizon_days: number;
+  /** Cashback on dine-in bills, % of what the diner paid (excl. fee, tip, service charge). */
+  dining_cashback_percent: number;
+  dining_cashback_max_paise: number;
+  dining_cashback_release_hours: number;
+  dining_cashback_expiry_days: number;
+  /** At most this % of a bill (before the fee) can be paid from the Tixit Wallet. */
+  dining_wallet_max_redeem_percent: number;
 }
 
 const DEFAULTS: PlatformSettings = {
@@ -36,6 +43,11 @@ const DEFAULTS: PlatformSettings = {
   dining_convenience_fee_paise: 1000,
   dining_auto_verify_hours: 6,
   dining_slot_horizon_days: 14,
+  dining_cashback_percent: 5,
+  dining_cashback_max_paise: 15000,
+  dining_cashback_release_hours: 24,
+  dining_cashback_expiry_days: 90,
+  dining_wallet_max_redeem_percent: 50,
 };
 
 const CACHE_TTL_MS = 30_000;

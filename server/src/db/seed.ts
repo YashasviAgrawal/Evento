@@ -301,6 +301,7 @@ async function clearDemoData(): Promise<void> {
       coupon_redemptions, payment_events, payments, refunds, tickets, booking_items, bookings,
       ticket_types, events, venues, coupons, notifications, audit_logs, otp_codes, refresh_tokens, organizers,
       finance.entries, finance.transactions, finance.settlements, finance.accounts,
+      finance.wallet_redemptions, finance.wallet_credits, outbox_events,
       dining.reviews, dining.offer_redemptions, dining.bill_payments, dining.reservations, dining.slots,
       dining.offers, dining.inventory_rules, dining.restaurant_members, dining.restaurant_media,
       dining.collections, dining.restaurants
@@ -629,7 +630,7 @@ async function seed(): Promise<void> {
 
   /* ── a pending refund so the admin queue is not empty ── */
   const refundTarget = await queryOne<{ id: string; total_paise: number; user_id: string }>(
-    `SELECT b.id, b.total_paise, b.user_id FROM bookings b WHERE b.status = 'confirmed' ORDER BY b.created_at DESC LIMIT 1`,
+    `SELECT b.id, b.total_paise, b.user_id FROM bookings b WHERE b.status = 'confirmed' AND b.total_paise > 0 ORDER BY b.created_at DESC LIMIT 1`,
   );
   if (refundTarget) {
     const payment = await queryOne<{ id: string }>('SELECT id FROM payments WHERE booking_id = $1 LIMIT 1', [
@@ -673,6 +674,7 @@ async function seed(): Promise<void> {
 │  Dine-in    partner@tixit.test   owns Ember & Oak + Terrace  │
 │             cashier@tixit.test   cashier at Ember & Oak      │
 │  Codes      TIXITDINE (₹100 off) · FIRSTBITE (10% off)       │
+│  Wallet     diya@example.com has ₹150 cashback to spend      │
 └──────────────────────────────────────────────────────────────┘
 `);
 }

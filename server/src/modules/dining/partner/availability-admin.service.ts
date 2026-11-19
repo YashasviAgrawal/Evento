@@ -34,6 +34,8 @@ export const rulesInput = z.object({
 export type RulesInput = z.infer<typeof rulesInput>;
 
 export const settingsInput = z.object({
+  /** Per-guest table deposit in rupees; 0 means free bookings. */
+  coverChargePerGuest: z.coerce.number().min(0).max(5000).optional(),
   autoAccept: z.boolean().optional(),
   bookingEnabled: z.boolean().optional(),
   payBillEnabled: z.boolean().optional(),
@@ -49,8 +51,8 @@ interface RuleRow {
 }
 
 export async function getAvailability(restaurantId: string) {
-  const restaurant = await queryOne<{ auto_accept: boolean; booking_enabled: boolean; pay_bill_enabled: boolean }>(
-    'SELECT auto_accept, booking_enabled, pay_bill_enabled FROM dining.restaurants WHERE id = $1',
+  const restaurant = await queryOne<{ auto_accept: boolean; booking_enabled: boolean; pay_bill_enabled: boolean; cover_charge_paise: number }>(
+    'SELECT auto_accept, booking_enabled, pay_bill_enabled, cover_charge_paise FROM dining.restaurants WHERE id = $1',
     [restaurantId],
   );
   if (!restaurant) throw new NotFoundError('Restaurant');
@@ -71,6 +73,7 @@ export async function getAvailability(restaurantId: string) {
       autoAccept: restaurant.auto_accept,
       bookingEnabled: restaurant.booking_enabled,
       payBillEnabled: restaurant.pay_bill_enabled,
+      coverChargePerGuestPaise: Number(restaurant.cover_charge_paise),
     },
     rules: rows.map((row) => ({
       weekday: row.weekday,
@@ -162,9 +165,16 @@ export async function updateSettings(restaurantId: string, input: z.infer<typeof
     `UPDATE dining.restaurants SET
        auto_accept = COALESCE($2, auto_accept),
        booking_enabled = COALESCE($3, booking_enabled),
-       pay_bill_enabled = COALESCE($4, pay_bill_enabled)
+       pay_bill_enabled = COALESCE($4, pay_bill_enabled),
+       cover_charge_paise = COALESCE($5, cover_charge_paise)
      WHERE id = $1`,
-    [restaurantId, input.autoAccept ?? null, input.bookingEnabled ?? null, input.payBillEnabled ?? null],
+    [
+      restaurantId,
+      input.autoAccept ?? null,
+      input.bookingEnabled ?? null,
+      input.payBillEnabled ?? null,
+      input.coverChargePerGuest === undefined ? null : Math.round(input.coverChargePerGuest * 100),
+    ],
   );
   return getAvailability(restaurantId);
 }

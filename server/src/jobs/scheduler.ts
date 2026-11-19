@@ -1,5 +1,5 @@
 import { logger } from '../config/logger';
-import { query } from '../db/pool';
+import { pool, query } from '../db/pool';
 import { env } from '../config/env';
 import { expireStaleBookings } from '../modules/bookings/booking.service';
 import { purgeExpiredOtps } from '../modules/auth/otp.service';
@@ -8,24 +8,51 @@ import { sendMail } from '../services/mail.service';
 import { formatEventDate } from '../utils/dates';
 import { autoVerifyStaleBills, cancelAbandonedBills } from '../modules/dining/bills/bill.service';
 import { sendReservationReminders } from '../modules/dining/notifications';
+import { dispatchOutbox } from '../modules/platform/outbox';
+import { expireUnpaidHolds } from '../modules/dining/reservations/reservation.service';
+import { expireCredits, releaseCashback } from '../modules/finance/wallet';
 
 /**
  * In-process background jobs.
  *
- * Deliberately setInterval rather than a queue: at this scale an external
- * worker is unnecessary complexity. Each job is guarded so a failure logs and
- * the timer survives. Running more than one API instance would mean moving
- * these behind a lock or a real scheduler — noted in the README.
+ * Deliberately setInterval plus PostgreSQL rather than a separate queue
+ * service: every job holds an advisory lock while it runs (see `every`), and
+ * cross-module side effects go through the transactional outbox, so any
+ * number of API instances can run this scheduler safely with no Redis.
  */
 
 const timers: NodeJS.Timeout[] = [];
 
+/**
+ * Run `task` every `intervalMs`, at most once at a time across *all* API
+ * instances: each run takes a PostgreSQL advisory lock named after the job and
+ * skips if another instance holds it. That is what lets the API scale out
+ * without reminders or settlements firing twice.
+ */
 function every(label: string, intervalMs: number, task: () => Promise<unknown>): void {
+  let running = false;
   const run = async () => {
+    if (running) return;
+    running = true;
+    const client = await pool.connect().catch(() => null);
+    if (!client) {
+      running = false;
+      return;
+    }
+    let locked = false;
     try {
-      await task();
+      const { rows } = await client.query<{ locked: boolean }>(
+        "SELECT pg_try_advisory_lock(hashtext('tixit-job:' || $1)) AS locked",
+        [label],
+      );
+      locked = Boolean(rows[0]?.locked);
+      if (locked) await task();
     } catch (err) {
       logger.error({ err, job: label }, 'Scheduled job failed');
+    } finally {
+      if (locked) await client.query("SELECT pg_advisory_unlock(hashtext('tixit-job:' || $1))", [label]).catch(() => undefined);
+      client.release();
+      running = false;
     }
   };
   const timer = setInterval(run, intervalMs);
@@ -117,6 +144,10 @@ export function startScheduler(): void {
     if (count) logger.info({ count }, 'Auto-verified paid dine-in bills');
   });
   every('dining-cancel-abandoned-bills', 15 * 60_000, cancelAbandonedBills);
+  every('outbox-dispatch', 5_000, dispatchOutbox);
+  every('dining-expire-deposit-holds', 60_000, expireUnpaidHolds);
+  every('wallet-release-cashback', 10 * 60_000, releaseCashback);
+  every('wallet-expire-credits', 60 * 60_000, expireCredits);
   every('dining-reservation-reminders', 5 * 60_000, async () => {
     const count = await sendReservationReminders();
     if (count) logger.info({ count }, 'Sent dine-in table reminders');

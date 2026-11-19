@@ -191,3 +191,17 @@ export const changePassword = asyncHandler(async (req, res) => {
   clearSessionCookies(res);
   return ok(res, { message: 'Password updated. Please sign in again.' });
 });
+
+/* ───────────────────────── phone sign-in ───────────────────────── */
+
+export const requestPhoneOtp = asyncHandler(async (req, res) => {
+  const result = await authService.requestPhoneOtp(req.body.phone);
+  return ok(res, { ...result, message: 'A code is on its way by SMS.' });
+});
+
+export const verifyPhoneOtp = asyncHandler(async (req, res) => {
+  const row = await authService.verifyPhoneOtp(req.body.phone, req.body.code);
+  const tokens = await authService.createSession(row, requestContext(req));
+  setSessionCookies(res, tokens.refreshToken, tokens.expiresAt);
+  return ok(res, sessionBody(req, authService.toPublicUser(row), tokens));
+});

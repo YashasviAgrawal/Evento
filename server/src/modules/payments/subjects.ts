@@ -7,7 +7,7 @@
  * owning module, which registers a handler here. That keeps this module free
  * of imports from every product built on top of it.
  */
-export type PaymentSubjectKind = 'bill_payment';
+export type PaymentSubjectKind = 'bill_payment' | 'reservation';
 
 export interface CaptureContext {
   method: string;

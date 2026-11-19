@@ -25,6 +25,7 @@ import uploadRoutes, { uploadDir } from './modules/uploads/upload.routes';
 import diningRoutes from './modules/dining/dining.routes';
 import partnerRoutes from './modules/dining/partner/partner.routes';
 import diningAdminRoutes from './modules/dining/admin/dining-admin.routes';
+import walletRoutes from './modules/finance/wallet.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -154,6 +155,7 @@ export function createApp(): Express {
   // the restaurant partner console — same API, same session, same database.
   api.use('/dining', diningRoutes);
   api.use('/partner', partnerRoutes);
+  api.use('/wallet', walletRoutes);
 
   api.get('/', (_req, res) =>
     ok(res, {
