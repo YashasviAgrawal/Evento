@@ -32,6 +32,10 @@ export const PLATFORM = {
   /** Cover charges paid at booking, held until credited, refunded or forfeited. */
   coverDeposits: { code: 'platform:cover_deposits', name: 'Table deposits held', kind: 'liability', ownerType: 'platform' },
   /** Shares of a split bill collected before the last one lands. */
+  /** Tixit Pass sales, net of GST. */
+  membershipRevenue: { code: 'platform:membership_revenue', name: 'Tixit Pass revenue', kind: 'revenue', ownerType: 'platform' },
+  /** Promoted listings sold to restaurants, net of GST. */
+  advertisingRevenue: { code: 'platform:advertising_revenue', name: 'Promoted listing revenue', kind: 'revenue', ownerType: 'platform' },
   splitCollections: { code: 'platform:split_collections', name: 'Split-bill shares held', kind: 'liability', ownerType: 'platform' },
 } as const satisfies Record<string, AccountSpec>;
 

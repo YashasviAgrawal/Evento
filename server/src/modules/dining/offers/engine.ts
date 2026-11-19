@@ -15,7 +15,7 @@
  *   6. + tip                (passes to the restaurant in full)
  *   7. − table deposit      cover charge paid at booking, credited here
  *   8. − Tixit Wallet       capped at a share of what is left
- *   9. + platform fee       (flat, GST inclusive)
+ *   9. + platform fee       (flat, GST inclusive; waived for Tixit Pass members)
  *
  * Every line carries who funds it, which is what the diner's receipt shows and
  * what the ledger posts. Amounts are integer paise and every step rounds
@@ -23,7 +23,7 @@
  */
 import { timeToMinutes, type LocalMoment } from '../time';
 
-export const ENGINE_VERSION = '2.0.0';
+export const ENGINE_VERSION = '2.1.0';
 const GST_PERCENT = 18;
 
 export type OfferMode = 'prebook' | 'walkin';
@@ -80,6 +80,8 @@ export interface PriceBillInput {
   /** At most this % of the bill after discounts and deposit can come from the wallet. */
   walletMaxPercent?: number;
   convenienceFeePaise: number;
+  /** A Tixit Pass member pays no platform fee. */
+  feeWaived?: boolean;
   commissionBps: number;
 }
 
@@ -119,6 +121,8 @@ export interface BillPricing {
   walletUsedPaise: number;
   convenienceFeePaise: number;
   convenienceFeeGstPaise: number;
+  /** The fee a Tixit Pass member did not pay — what the pass saved on this bill. */
+  feeWaivedPaise: number;
   totalDiscountPaise: number;
   restaurantFundedDiscountPaise: number;
   platformFundedDiscountPaise: number;
@@ -275,7 +279,9 @@ export function priceBill(input: PriceBillInput): BillPricing {
   due -= walletUsed;
 
   // 9. Platform fee.
-  const fee = bill > 0 ? Math.max(0, Math.round(input.convenienceFeePaise)) : 0;
+  const standardFee = bill > 0 ? Math.max(0, Math.round(input.convenienceFeePaise)) : 0;
+  const feeWaived = input.feeWaived ? standardFee : 0;
+  const fee = standardFee - feeWaived;
   const feeGst = Math.round((fee * GST_PERCENT) / (100 + GST_PERCENT));
   const payable = due + fee;
 
@@ -312,6 +318,9 @@ export function priceBill(input: PriceBillInput): BillPricing {
   if (coverCredit > 0) lines.push({ key: 'cover_credit', label: 'Table deposit paid at booking', amountPaise: -coverCredit });
   if (walletUsed > 0) lines.push({ key: 'wallet', label: 'Tixit Wallet', amountPaise: -walletUsed });
   if (fee > 0) lines.push({ key: 'fee', label: 'Platform fee (incl. GST)', amountPaise: fee });
+  if (feeWaived > 0) {
+    lines.push({ key: 'fee_waived', label: 'Platform fee', amountPaise: 0, note: `₹${feeWaived / 100} waived with Tixit Pass` });
+  }
 
   return {
     engineVersion: ENGINE_VERSION,
@@ -329,6 +338,7 @@ export function priceBill(input: PriceBillInput): BillPricing {
     walletUsedPaise: walletUsed,
     convenienceFeePaise: fee,
     convenienceFeeGstPaise: feeGst,
+    feeWaivedPaise: feeWaived,
     totalDiscountPaise: totalDiscount,
     restaurantFundedDiscountPaise: restaurantFunded,
     platformFundedDiscountPaise: platformFunded,

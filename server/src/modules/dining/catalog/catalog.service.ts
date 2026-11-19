@@ -12,6 +12,7 @@ type Hours = Record<string, Array<[string, string]>>;
 
 interface CardRow {
   id: string;
+  sponsored: boolean;
   slug: string;
   name: string;
   locality: string;
@@ -52,6 +53,7 @@ export interface RestaurantCard {
   payBillEnabled: boolean;
   bookingEnabled: boolean;
   isFeatured: boolean;
+  sponsored: boolean;
   openNow: boolean;
   closesAt: string | null;
   distanceKm: number | null;
@@ -69,7 +71,10 @@ function cardSelect(extra = ''): string {
   SELECT r.id, r.slug, r.name, r.locality, c.name AS city_name, c.slug AS city_slug, r.cuisines, r.tags,
          r.cost_for_two_paise, r.cover_url, r.logo_url, r.rating_avg, r.rating_count, r.pay_bill_enabled,
          r.booking_enabled, r.is_featured, r.hours, r.lat, r.lng,
-         bo.percent_off AS best_percent, bo.flat_off_paise AS best_flat_paise, bo.applies_to AS best_applies_to
+         bo.percent_off AS best_percent, bo.flat_off_paise AS best_flat_paise, bo.applies_to AS best_applies_to,
+         EXISTS (SELECT 1 FROM dining.promotions p
+                  WHERE p.restaurant_id = r.id AND p.status = 'active'
+                    AND (now() AT TIME ZONE '${DINING_TZ}')::date BETWEEN p.starts_on AND p.ends_on) AS sponsored
          ${extra}
     FROM dining.restaurants r
     JOIN cities c ON c.id = r.city_id
@@ -77,6 +82,7 @@ function cardSelect(extra = ''): string {
       SELECT o.percent_off, o.flat_off_paise, o.applies_to
         FROM dining.offers o
        WHERE o.restaurant_id = r.id AND o.owner = 'restaurant' AND o.code IS NULL AND o.status = 'active'
+         AND (o.valid_from IS NULL OR o.valid_from <= now())
          AND (o.valid_until IS NULL OR o.valid_until > now())
        ORDER BY o.percent_off DESC NULLS LAST, o.flat_off_paise DESC NULLS LAST
        LIMIT 1
@@ -123,6 +129,8 @@ function toCard(row: CardRow): RestaurantCard {
     payBillEnabled: row.pay_bill_enabled,
     bookingEnabled: row.booking_enabled,
     isFeatured: row.is_featured,
+    /** A paid placement right now — the UI must label it. */
+    sponsored: row.sponsored,
     openNow: state.openNow,
     closesAt: state.closesAt,
     distanceKm: row.distance_km === undefined || row.distance_km === null ? null : Math.round(Number(row.distance_km) * 10) / 10,
@@ -194,7 +202,8 @@ export async function searchRestaurants(input: SearchInput): Promise<{ items: Re
 
   // Sorts run on the outer query's computed columns, never on raw SQL text.
   const order: Record<NonNullable<SearchInput['sort']>, string> = {
-    relevance: 's.rank DESC, s.is_featured DESC, s.rating_avg DESC, s.rating_count DESC',
+    // Paid placement only on the default sort, and always labelled "Sponsored".
+    relevance: 's.sponsored DESC, s.rank DESC, s.is_featured DESC, s.rating_avg DESC, s.rating_count DESC',
     rating: 's.rating_avg DESC, s.rating_count DESC',
     distance: hasGeo ? 's.distance_km ASC' : 's.rating_avg DESC',
     cost_low: 's.cost_for_two_paise ASC',
@@ -291,6 +300,13 @@ export async function homeFeed(citySlug: string) {
   };
 }
 
+/** Live restaurants as cards, in no particular order (callers arrange them). */
+export async function cardsByIds(ids: string[]): Promise<RestaurantCard[]> {
+  if (ids.length === 0) return [];
+  const { rows } = await query<CardRow>(`${CARD_SELECT} WHERE r.id = ANY($1::uuid[]) AND r.status = 'live'`, [ids]);
+  return rows.map(toCard);
+}
+
 /** Cities where at least one restaurant is live — what the city picker offers. */
 export async function listCities() {
   const { rows } = await query<{ id: string; name: string; slug: string; state: string; restaurants: number }>(
@@ -353,6 +369,7 @@ export async function getRestaurant(slug: string) {
     query<OfferRow>(
       `SELECT ${OFFER_COLUMNS} FROM dining.offers o
         WHERE o.restaurant_id = $1 AND o.owner = 'restaurant' AND o.code IS NULL AND o.status = 'active'
+          AND (o.valid_from IS NULL OR o.valid_from <= now())
           AND (o.valid_until IS NULL OR o.valid_until > now())
         ORDER BY CASE o.applies_to WHEN 'prebook' THEN 0 WHEN 'both' THEN 1 ELSE 2 END, o.percent_off DESC NULLS LAST`,
       [row.id],

@@ -138,7 +138,23 @@ describe('wallet, bank offers and cashback', () => {
 });
 
 describe('table deposits', () => {
-  async function bookTerrace(auth: Record<string, string>, daysAhead: number) {
+  /**
+   * Book a table `daysAhead` days out. `0` means "a table later today": the
+   * booking is made for tomorrow and moved to `minutesFromNow`, so the test
+   * does not depend on what time of day it runs.
+   */
+  async function bookTerrace(auth: Record<string, string>, daysAhead: number, minutesFromNow = 0) {
+    const booking = await bookTerraceOn(auth, Math.max(1, daysAhead));
+    if (daysAhead === 0) {
+      await query(`UPDATE dining.reservations SET starts_at = now() + make_interval(mins => $2) WHERE code = $1`, [
+        booking.reservation.code,
+        minutesFromNow,
+      ]);
+    }
+    return booking;
+  }
+
+  async function bookTerraceOn(auth: Record<string, string>, daysAhead: number) {
     const day = new Date(Date.now() + daysAhead * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     const slots = await request(app).get(`/api/v1/dining/restaurants/${terrace.slug}/slots?date=${day}&party=2`);
     const slot = slots.body.data.slots.find((s: { available: boolean }) => s.available);
@@ -191,7 +207,7 @@ describe('table deposits', () => {
     const refunded = await queryOne<{ cover_status: string }>('SELECT cover_status FROM dining.reservations WHERE code = $1', [early.reservation.code]);
     expect(refunded!.cover_status).toBe('refunded');
 
-    const late = await bookTerrace(auth, 0);
+    const late = await bookTerrace(auth, 0, 120);
     await payDeposit(auth, late.reservation.code);
     const owedBefore = await liabilityBalance(restaurantPayable(terrace.id).code);
     await request(app).post(`/api/v1/dining/reservations/${late.reservation.code}/cancel`).set(auth).send({});

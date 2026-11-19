@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CalendarCheck2, ChevronRight, ExternalLink, LogOut, ReceiptText, Scale, ShieldCheck, Store, Ticket, UserRound, Wallet } from 'lucide-react';
+import { CalendarCheck2, ChevronRight, Crown, ExternalLink, LogOut, ReceiptText, Scale, ShieldCheck, Store, Ticket, UserRound, Wallet } from 'lucide-react';
 import { useAuth } from '@tixit/session';
 import { initials } from '@/lib/format';
 import { EVENTS_URL } from '@/lib/urls';
@@ -45,6 +45,7 @@ export default function AccountPage() {
 
       <ul className="mt-6 divide-y divide-ink-100 overflow-hidden rounded-3xl bg-white ring-1 ring-ink-200">
         <li><Link href="/bookings" className={row}><CalendarCheck2 className="h-5 w-5 text-ink-400" /><span className="flex-1 font-semibold">Your plans</span><ChevronRight className="h-4 w-4 text-ink-300" /></Link></li>
+        <li><Link href="/pass" className={row}><Crown className="h-5 w-5 text-brand-600" /><span className="flex-1 font-semibold">Tixit Pass</span><ChevronRight className="h-4 w-4 text-ink-300" /></Link></li>
         <li><Link href="/wallet" className={row}><Wallet className="h-5 w-5 text-ink-400" /><span className="flex-1 font-semibold">Wallet &amp; cashback</span><ChevronRight className="h-4 w-4 text-ink-300" /></Link></li>
         <li><Link href="/pay" className={row}><ReceiptText className="h-5 w-5 text-ink-400" /><span className="flex-1 font-semibold">Pay a bill</span><ChevronRight className="h-4 w-4 text-ink-300" /></Link></li>
         {restaurants && restaurants.length > 0 && (

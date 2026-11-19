@@ -11,6 +11,15 @@ import { Skeleton } from '@/components/ui/feedback';
 import { usePartnerRestaurant } from '@/components/partner/use-partner';
 import { InvoiceList } from '@/components/finance/invoice-list';
 
+const MOVEMENT_LABEL: Record<string, string> = {
+  bill_paid: 'Bill paid on Tixit',
+  settlement: 'Paid to your bank',
+  promotion_charged: 'Sponsored listing',
+  promotion_cancelled: 'Sponsored listing cancelled',
+  cover_forfeited: 'Table deposit kept',
+  cover_unused: 'Unused table deposit',
+};
+
 export default function PartnerPayoutsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { restaurant } = usePartnerRestaurant(id);
@@ -108,7 +117,7 @@ export default function PartnerPayoutsPage({ params }: { params: Promise<{ id: s
                       {credit ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold">{movement.kind === 'bill_paid' ? 'Bill paid on Tixit' : movement.kind === 'settlement' ? 'Paid to your bank' : movement.kind}</span>
+                      <span className="block text-sm font-semibold">{MOVEMENT_LABEL[movement.kind] ?? movement.kind.replace(/_/g, ' ')}</span>
                       <span className="block truncate text-xs text-ink-500">{movement.memo?.split(' via ')[0]} · {dateTime(movement.occurredAt)}</span>
                     </span>
                     <span className={cn('num text-sm font-bold', credit ? 'text-save-700' : 'text-ink-700')}>

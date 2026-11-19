@@ -8,6 +8,7 @@ import { Photo } from '@/components/ui/photo';
 import { Rail, RailCard, RestaurantCard } from '@/components/restaurant/restaurant-card';
 import { EmptyState } from '@/components/ui/feedback';
 import { CityPicker } from '@/components/shell/city-picker';
+import { FestivalBanner } from '@/components/restaurant/festival-banner';
 import { currentCity } from '@/lib/city.server';
 
 
@@ -105,6 +106,12 @@ export default async function HomePage() {
         </div>
       ) : (
         <>
+          {feed.festivals?.[0] && (
+            <section className="container-page mt-8 sm:mt-12">
+              <FestivalBanner festival={feed.festivals[0]} />
+            </section>
+          )}
+
           {feed.tonight.length > 0 && (
             <section className="container-page mt-8 sm:mt-12">
               <div>

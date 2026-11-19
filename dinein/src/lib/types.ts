@@ -31,6 +31,8 @@ export interface RestaurantCard {
   payBillEnabled: boolean;
   bookingEnabled: boolean;
   isFeatured: boolean;
+  /** A paid placement right now; always labelled to diners. */
+  sponsored: boolean;
   openNow: boolean;
   closesAt: string | null;
   distanceKm: number | null;
@@ -126,6 +128,35 @@ export interface HomeFeed {
   topRated: RestaurantCard[];
   collections: Array<{ slug: string; title: string; subtitle: string | null; coverUrl: string | null; count: number }>;
   cuisines: Array<{ name: string; count: number }>;
+  festivals: Festival[];
+}
+
+export interface Festival {
+  id: string;
+  slug: string;
+  title: string;
+  tagline: string | null;
+  description: string | null;
+  coverUrl: string | null;
+  startsOn: string;
+  endsOn: string;
+  status: 'draft' | 'published' | 'archived';
+  city: { name: string; slug: string };
+  participants: number;
+  phase: 'upcoming' | 'on' | 'over';
+}
+
+export interface FestivalPage extends Festival {
+  restaurants: Array<{
+    card: RestaurantCard;
+    highlight: string | null;
+    deal: { offerId: string; label: string; appliesTo: string; restaurantFundedPct: number };
+  }>;
+}
+
+export interface PassInfo {
+  plan: { pricePaise: number; days: number; cashbackMultiplier: number; feePaise: number };
+  membership: { active: boolean; validUntil: string | null; feesSavedPaise: number; billsWithPass: number } | null;
 }
 
 export interface CollectionPage {
@@ -205,6 +236,8 @@ export interface BillPricing {
   serviceChargePaise: number;
   tipPaise: number;
   convenienceFeePaise: number;
+  /** The platform fee Tixit Pass waived on this bill. */
+  feeWaivedPaise: number;
   totalDiscountPaise: number;
   amountPayablePaise: number;
   lines: PricingLine[];

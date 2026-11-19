@@ -20,6 +20,8 @@ import { DINING_TZ } from '../time';
 
 /** Other support services n.e.c. — commission for facilitating sales. */
 export const COMMISSION_SAC = '998599';
+/** Sale of internet advertising space. */
+export const ADVERTISING_SAC = '998365';
 const NUMBER_PREFIX = 'TXD';
 
 export interface InvoiceParty {
@@ -32,6 +34,8 @@ export interface InvoiceParty {
 
 export interface InvoiceLine {
   description: string;
+  /** Overrides the invoice's SAC for this line (advertising differs from commission). */
+  sac?: string;
   quantity: number;
   basePaise: number;
   taxablePaise: number;
@@ -98,6 +102,10 @@ interface Earnings {
   forfeit_base: number;
   forfeit_commission: number;
   forfeit_gst: number;
+  promos: number;
+  promo_days: number;
+  promo_net: number;
+  promo_gst: number;
 }
 
 /**
@@ -128,18 +136,30 @@ async function earningsFor(start: string, end: string, client: Queryable, restau
          JOIN dining.reservations v ON v.id = t.source_id, period
         WHERE t.kind = 'cover_forfeited' AND t.occurred_at >= period.from_ts AND t.occurred_at < period.to_ts
         GROUP BY v.restaurant_id
+     ),
+     -- Sponsored listings, invoiced in the month they start (they can only be
+     -- cancelled before starting, so an issued invoice never needs undoing).
+     promos AS (
+       SELECT p.restaurant_id, count(*)::int AS promos, sum(p.ends_on - p.starts_on + 1)::int AS days,
+              sum(p.net_paise)::bigint AS net, sum(p.gst_paise)::bigint AS gst
+         FROM dining.promotions p
+        WHERE p.status = 'active' AND p.starts_on BETWEEN $1::date AND $2::date
+        GROUP BY p.restaurant_id
      )
      SELECT r.id AS restaurant_id, r.name, r.legal_name, r.gstin, r.address, r.billing_address, c.state,
             COALESCE(b.bills, 0) AS bills, COALESCE(b.base, 0) AS bill_base, COALESCE(b.commission, 0) AS bill_commission,
             COALESCE(b.gst, 0) AS bill_gst, COALESCE(f.forfeits, 0) AS forfeits, COALESCE(f.base, 0) AS forfeit_base,
-            COALESCE(f.commission, 0) AS forfeit_commission, COALESCE(f.gst, 0) AS forfeit_gst
+            COALESCE(f.commission, 0) AS forfeit_commission, COALESCE(f.gst, 0) AS forfeit_gst,
+            COALESCE(pr.promos, 0) AS promos, COALESCE(pr.days, 0) AS promo_days, COALESCE(pr.net, 0) AS promo_net,
+            COALESCE(pr.gst, 0) AS promo_gst
        FROM dining.restaurants r
        JOIN cities c ON c.id = r.city_id
        LEFT JOIN bills b ON b.restaurant_id = r.id
        LEFT JOIN forfeits f ON f.restaurant_id = r.id
-      WHERE (b.restaurant_id IS NOT NULL OR f.restaurant_id IS NOT NULL)
+       LEFT JOIN promos pr ON pr.restaurant_id = r.id
+      WHERE (b.restaurant_id IS NOT NULL OR f.restaurant_id IS NOT NULL OR pr.restaurant_id IS NOT NULL)
         AND ($4::uuid IS NULL OR r.id = $4)
-        AND COALESCE(b.commission, 0) + COALESCE(f.commission, 0) > 0
+        AND COALESCE(b.commission, 0) + COALESCE(f.commission, 0) + COALESCE(pr.net, 0) > 0
       ORDER BY r.name`,
     [start, end, DINING_TZ, restaurantId ?? null],
   );
@@ -208,6 +228,16 @@ export async function generateInvoices(month: string, options: { restaurantId?: 
           basePaise: Number(row.forfeit_base),
           taxablePaise: Number(row.forfeit_commission),
           gstPaise: Number(row.forfeit_gst),
+        });
+      }
+      if (Number(row.promo_net) > 0) {
+        lines.push({
+          description: `Sponsored listing on Tixit Dine-in (${row.promo_days} days)`,
+          sac: ADVERTISING_SAC,
+          quantity: row.promos,
+          basePaise: Number(row.promo_net),
+          taxablePaise: Number(row.promo_net),
+          gstPaise: Number(row.promo_gst),
         });
       }
       const taxable = lines.reduce((sum, line) => sum + line.taxablePaise, 0);

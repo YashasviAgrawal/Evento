@@ -41,6 +41,17 @@ export function Receipt({
       <dl className="num space-y-0.5 px-4 pb-3 pt-1 text-[14px]">
         {pricing.lines.map((line) => {
           const saving = line.amountPaise < 0;
+          if (line.key === 'fee_waived') {
+            return (
+              <div key={line.key} className="flex items-start justify-between gap-4 py-1.5 text-ink-700">
+                <dt className="min-w-0">
+                  <span>{line.label}</span>
+                  <span className="mt-0.5 block text-[10.5px] font-bold uppercase tracking-wider text-brand-600">Tixit Pass</span>
+                </dt>
+                <dd className="shrink-0 font-semibold text-save-700">Free</dd>
+              </div>
+            );
+          }
           if (line.key === 'non_discountable') {
             return (
               <div key={line.key} className="py-1.5 text-xs text-ink-500">

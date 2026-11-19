@@ -26,6 +26,7 @@ import { availableBalance, accrueCashback, captureForBill, holdForBill, releaseF
 import { codeAt, newVerifySecret, STEP_SECONDS } from './verification';
 import { TOPICS } from '../notifications';
 import { createShares, MAX_SPLIT } from './split-shares';
+import { isMember } from '../../pass/pass.service';
 import { enqueue, kickOutbox } from '../../platform/outbox';
 
 /* ───────────────────────── input ───────────────────────── */
@@ -156,6 +157,7 @@ async function price(input: BillInput, userId: string | null, client: Queryable)
     walletAvailablePaise: input.useWallet ? walletAvailable : 0,
     walletMaxPercent: Number(settings.dining_wallet_max_redeem_percent),
     convenienceFeePaise: Number(settings.dining_convenience_fee_paise),
+    feeWaived: await isMember(userId, client),
     commissionBps: restaurant.commission_bps,
   });
 
@@ -198,6 +200,8 @@ function publicPricing(pricing: BillPricing) {
     serviceChargePaise: pricing.serviceChargePaise,
     tipPaise: pricing.tipPaise,
     convenienceFeePaise: pricing.convenienceFeePaise,
+    // Bills priced before Tixit Pass have no such field.
+    feeWaivedPaise: pricing.feeWaivedPaise ?? 0,
     totalDiscountPaise: pricing.totalDiscountPaise,
     amountPayablePaise: pricing.amountPayablePaise,
     lines: pricing.lines,
@@ -327,9 +331,9 @@ export async function createBill(userId: string, input: BillInput, idempotencyKe
          non_discountable_paise, service_charge_paise, tip_paise, pricing, restaurant_discount_paise,
          platform_discount_paise, convenience_fee_paise, amount_payable_paise, commission_base_paise,
          commission_paise, commission_gst_paise, restaurant_payout_paise, verify_secret, wallet_used_paise,
-         cover_credit_paise, bank_discount_paise, bank_offer_id)
+         cover_credit_paise, bank_discount_paise, bank_offer_id, pass_savings_paise)
        VALUES ($1, $2, $3, $4, 'pending_payment', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
-               $20, $21, $22, $23)
+               $20, $21, $22, $23, $24)
        ON CONFLICT (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
        RETURNING id`,
       [
@@ -356,6 +360,7 @@ export async function createBill(userId: string, input: BillInput, idempotencyKe
         pricing.coverCreditPaise,
         pricing.bankFundedDiscountPaise + (pricing.bankOffer?.restaurantSharePaise ?? 0),
         pricing.bankOffer ? bankOffer?.id ?? null : null,
+        pricing.feeWaivedPaise,
       ],
     );
     if (rows[0]) {
@@ -576,10 +581,11 @@ export async function settleBill(
         billId: bill.id,
         shareId: share.id,
         eligiblePaise: Math.floor((eligible * Number(share.amount_paise)) / p.amountPayablePaise),
+        member: await isMember(share.payer_user_id, client),
       });
     }
   } else {
-    await accrueCashback(client, { userId: bill.user_id, billId: bill.id, eligiblePaise: eligible });
+    await accrueCashback(client, { userId: bill.user_id, billId: bill.id, eligiblePaise: eligible, member: await isMember(bill.user_id, client) });
   }
 
   await enqueue(client, TOPICS.billPaid, { billId: bill.id, notify: options.notify !== false });

@@ -31,9 +31,9 @@ export function RestaurantCard({ card, priority = false, className }: { card: Ca
         >
           <div className="scrim absolute inset-0" />
           {card.bestOffer && <OfferBadge label={card.bestOffer.label} className="absolute left-3 top-3" />}
-          {card.isFeatured && (
+          {(card.sponsored || card.isFeatured) && (
             <span className="glass absolute right-3 top-3 rounded-full px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wider text-white">
-              Tixit pick
+              {card.sponsored ? 'Sponsored' : 'Tixit pick'}
             </span>
           )}
           <div className="absolute inset-x-3.5 bottom-3 text-white">
@@ -86,6 +86,11 @@ export function RailCard({ card }: { card: Card }) {
       <Photo src={card.coverUrl} alt={card.name} sizes="272px" className="aspect-[4/3] rounded-2xl">
         <div className="scrim absolute inset-0 opacity-60" />
         {card.bestOffer && <OfferBadge label={card.bestOffer.label} className="absolute bottom-2.5 left-2.5" />}
+        {card.sponsored && (
+          <span className="glass absolute right-2.5 top-2.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+            Sponsored
+          </span>
+        )}
       </Photo>
       <div className="mt-2.5 flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -123,6 +128,9 @@ export function ResultRow({ card }: { card: Card }) {
           {card.distanceKm !== null && ` · ${card.distanceKm} km`} · {rupees(card.costForTwoPaise)} for two
         </p>
         <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
+          {card.sponsored && (
+            <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-ink-500 ring-1 ring-inset ring-ink-200">Sponsored</span>
+          )}
           <span
             className={cn(
               'rounded-full px-2 py-0.5 text-[11px] font-bold',

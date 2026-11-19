@@ -82,7 +82,7 @@ export function renderInvoicePdf(invoice: Invoice): NodeJS.ReadableStream {
 
   for (const line of invoice.lines) {
     doc.font('Helvetica').fontSize(9).fillColor(INK).text(line.description, cols.desc + 8, y, { width: 240 });
-    doc.font('Helvetica').fontSize(8).fillColor(MUTED).text(`SAC ${invoice.sac}`, cols.desc + 8, doc.y + 1);
+    doc.font('Helvetica').fontSize(8).fillColor(MUTED).text(`SAC ${line.sac ?? invoice.sac}`, cols.desc + 8, doc.y + 1);
     doc.font('Helvetica').fontSize(9).fillColor(INK);
     doc.text(String(line.quantity), cols.qty, y, { width: 32, align: 'right' });
     doc.text(inr(line.basePaise), cols.base, y, { width: 72, align: 'right' });

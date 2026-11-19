@@ -12,6 +12,7 @@ import { newVerifySecret } from '../modules/dining/bills/verification';
 import { markBillPaid } from '../modules/dining/bills/bill.service';
 import { toLocalMoment } from '../modules/dining/time';
 import { seedMenus } from './seed-menus';
+import { seedCampaigns } from './seed-campaigns';
 import { PLATFORM, post } from '../modules/finance/ledger';
 
 const img = (id: string, w = 1200) => `https://images.unsplash.com/${id}?w=${w}&q=75&auto=format&fit=crop`;
@@ -530,6 +531,7 @@ export async function seedDining(users: { adminId: string; customerIds: string[]
 
   await seedMenus(restaurantIds.map((id, i) => ({ id, cuisines: RESTAURANTS[i]!.cuisines })));
   await seedHistory(restaurantIds.slice(0, 6), users.customerIds);
+  await seedCampaigns(users.adminId);
 
   // A little spendable cashback for the demo diner, through the real ledger.
   const diner = await queryOne<{ id: string }>(`SELECT id FROM users WHERE email = 'diya@example.com'`);

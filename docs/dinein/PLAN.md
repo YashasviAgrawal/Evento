@@ -680,3 +680,33 @@ platform codes and bank offers. 94 server tests, every money path asserting a ba
 *after* payment and mismatches are flagged for operations rather than blocked — enforcing it before
 payment needs Razorpay's own Offers product configured per bank. Phone sign-in works for accounts
 that already have the number; creating an account still needs a verified email, where receipts go.
+
+**Phase 4, built:**
+
+- *Privacy and grievances (DPDP Act):* append-only consent log, data export, correction and erasure
+  requests with deadlines, a published Grievance Officer and a complaint desk for admins.
+- *Cross-sell on tixit.in:* "Dinner before the show?" on the events home, "Eat nearby before the
+  show" on event pages (from the venue's coordinates), a Dine-in link in the navbar and footer, and
+  the Tixit Wallet on the events account page.
+- *Digital menus and diner photos:* sections and dishes with diet marks, spice and badges, one-tap
+  sold out; up to five byte-checked photos per verified review, moderated by admins with audited
+  reasons; public replies to reviews from the restaurant.
+- *Split the bill:* priced once, divided into shares paid from links by friends' own accounts; the
+  bill settles only when the last share lands, and expiry or cancellation refunds every paid share.
+- *Commission invoices:* monthly, numbered per financial year, CGST + SGST or IGST by place of
+  supply, PDF downloads for owners and admins; issued as statements until `SUPPLIER_GSTIN` is set.
+- *Multi-city:* city picker remembered in a cookie; Delhi seeded alongside Jaipur.
+- *Tixit Pass:* no platform fee and double cashback, enforced in the pricing engine and the wallet;
+  renewals stack onto the remaining time.
+- *Food festivals:* dated city campaigns whose deals are ordinary offers valid for those dates, so
+  they can be co-funded by Tixit through the offer's funding split.
+- *Sponsored listings:* top of the default search in the restaurant's city, always labelled,
+  charged to the restaurant's payouts and invoiced as advertising (SAC 998365) in the month it starts.
+
+120 server tests; every money path asserts a balanced ledger.
+
+**Still to do, and why:** an AI concierge (needs an API key), point-of-sale integrations such as
+Petpooja (need partner API documentation and credentials), bank offers enforced *before* payment
+(needs Razorpay Offers configured per bank), and native apps. Credit notes for invoices are not
+needed yet: bills refunded after invoicing are rare, and sponsored listings can only be cancelled
+before they start — but they will be needed once refunds after month-end happen.

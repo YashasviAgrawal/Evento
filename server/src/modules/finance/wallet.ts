@@ -125,13 +125,16 @@ export async function accrueCashback(
     eligiblePaise: number;
     /** A split bill earns cashback per share, for whoever paid it. */
     shareId?: string;
+    /** Tixit Pass members earn a multiple of the usual rate (and cap). */
+    member?: boolean;
   },
 ): Promise<number> {
   const settings = await getSettings(client);
+  const multiplier = input.member ? Math.max(1, Number(settings.pass_cashback_multiplier)) : 1;
   // Whole rupees, rounded down: "₹82 cashback" reads better than "₹82.37".
   const raw = Math.min(
-    Number(settings.dining_cashback_max_paise),
-    Math.round((Math.max(0, input.eligiblePaise) * Number(settings.dining_cashback_percent)) / 100),
+    Number(settings.dining_cashback_max_paise) * multiplier,
+    Math.round((Math.max(0, input.eligiblePaise) * Number(settings.dining_cashback_percent) * multiplier) / 100),
   );
   const amount = Math.floor(raw / 100) * 100;
   if (amount <= 0) return 0;

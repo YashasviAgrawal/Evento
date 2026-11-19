@@ -7,6 +7,8 @@ import { audit } from '../../../services/audit.service';
 import * as admin from './dining-admin.service';
 import * as reviews from '../reviews.service';
 import * as invoices from '../invoices/invoice.service';
+import * as festivals from '../festivals/festival.service';
+import * as promotions from '../promotions/promotion.service';
 import { sendInvoicePdf } from '../invoices/invoice.pdf';
 import { onTransferEvent } from '../../payments/payment.service';
 
@@ -199,6 +201,92 @@ router.get(
   '/invoices/:id/pdf',
   validate({ params: idParam }),
   asyncHandler(async (req, res) => sendInvoicePdf(res, await invoices.getInvoice(req.params.id!))),
+);
+
+/* ───────────────────────── festivals ───────────────────────── */
+
+router.get('/festivals', asyncHandler(async (_req, res) => ok(res, await festivals.listFestivals())));
+
+router.get(
+  '/festivals/:slug',
+  validate({ params: z.object({ slug: z.string().min(1).max(120) }) }),
+  asyncHandler(async (req, res) => ok(res, await festivals.getFestival(req.params.slug!, { includeDraft: true }))),
+);
+
+router.post(
+  '/festivals',
+  validate({ body: festivals.festivalInput }),
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req);
+    const created = await festivals.createFestival(user.id, req.body);
+    await audit({ actorId: user.id, actorRole: user.role, action: 'dining.festival.created', entityType: 'dining.festival', entityId: created.id });
+    return ok(res, created, 201);
+  }),
+);
+
+router.patch(
+  '/festivals/:id/status',
+  validate({ params: idParam, body: z.object({ status: z.enum(['draft', 'published', 'archived']) }) }),
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req);
+    await festivals.setFestivalStatus(req.params.id!, req.body.status);
+    await audit({
+      actorId: user.id,
+      actorRole: user.role,
+      action: `dining.festival.${req.body.status}`,
+      entityType: 'dining.festival',
+      entityId: req.params.id!,
+    });
+    return ok(res, { status: req.body.status });
+  }),
+);
+
+router.post(
+  '/festivals/:id/restaurants',
+  validate({ params: idParam, body: festivals.participantInput }),
+  asyncHandler(async (req, res) => ok(res, await festivals.addParticipant(currentUser(req).id, req.params.id!, req.body), 201)),
+);
+
+router.delete(
+  '/festivals/:id/restaurants/:restaurantId',
+  validate({ params: idParam.extend({ restaurantId: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    await festivals.removeParticipant(req.params.id!, req.params.restaurantId!);
+    return ok(res, { removed: true });
+  }),
+);
+
+/* ───────────────────────── promoted listings ───────────────────────── */
+
+router.get('/promotions', asyncHandler(async (_req, res) => ok(res, await promotions.listPromotions())));
+
+router.post(
+  '/promotions',
+  validate({ body: promotions.promotionInput }),
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req);
+    const created = await promotions.createPromotion(user.id, req.body);
+    await audit({
+      actorId: user.id,
+      actorRole: user.role,
+      action: 'dining.promotion.created',
+      entityType: 'dining.promotion',
+      entityId: created.id,
+      metadata: { totalPaise: created.totalPaise },
+    });
+    return ok(res, created, 201);
+  }),
+);
+
+router.post(
+  '/promotions/:id/cancel',
+  validate({ params: idParam }),
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req);
+    await promotions.cancelPromotion(req.params.id!);
+    await audit({ actorId: user.id, actorRole: user.role, action: 'dining.promotion.cancelled', entityType: 'dining.promotion', entityId: req.params.id! });
+    return ok(res, { cancelled: true });
+  }),
 );
 
 export default router;

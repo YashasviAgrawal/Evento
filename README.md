@@ -99,6 +99,10 @@ product and engineering plan is in [`docs/dinein/PLAN.md`](docs/dinein/PLAN.md).
 | Pay Bill: custom keypad, items-not-on-offer, opt-in service charge, tip, promo code, itemised receipt | `/pay`, `/pay/[slug]` |
 | Live payment pass: 30-second rotating code, server-synced clock, flips to "Verified" | `/bills/[code]` |
 | Your plans: upcoming/past tables, payments, cancel, pay from a booking | `/bookings` |
+| Split the bill: equal shares, a link per friend, the host can cover the rest | `/bills/[code]`, `/split/[token]` |
+| Tixit Pass: no platform fee and double cashback | `/pass` |
+| Food festivals in the diner's city | `/festivals/[slug]` |
+| Privacy centre (consents, data export, requests) and Grievance Officer | `/account/privacy`, `/grievance` |
 
 | Restaurant partner (by membership role) | Where |
 | --- | --- |
@@ -106,19 +110,27 @@ product and engineering plan is in [`docs/dinein/PLAN.md`](docs/dinein/PLAN.md).
 | Reservations by day: accept, decline, seat, complete, no-show | `/partner/[id]/reservations` |
 | Offers: create, edit, pause, remove — the restaurant sets the depth | `/partner/[id]/offers` |
 | Hours & tables: weekly seating windows and covers, close a date, booking/Pay Bill switches | `/partner/[id]/availability` |
-| Payouts from the ledger, settlements, 7-day sales | `/partner/[id]/payouts` |
+| Payouts from the ledger, settlements, 7-day sales, monthly commission invoices (PDF) | `/partner/[id]/payouts` |
+| Menu: sections, dishes, photos, one-tap sold out | `/partner/[id]/menu` |
+| Reviews with diner photos; public replies | `/partner/[id]/reviews` |
 
 | Dine-in admin (platform admins) | Where |
 | --- | --- |
 | Restaurants by status, onboarding sheet (starts in review with default hours) | `/admin` |
-| Go live / pause / delist, commercials, staff by Tixit email, payouts posted to the ledger | `/admin/[id]` |
+| Go live / pause / delist, commercials and tax details, staff by Tixit email, payouts posted to the ledger | `/admin/[id]` |
+| Food festivals and sponsored listings | `/admin/campaigns` |
+| Commission invoices by month | `/admin/invoices` |
+| Diner photo moderation | `/admin/photos` |
+| Grievances and data-protection requests | `/admin/desk` |
 
 **Also built:** a **Tixit Wallet** of cashback (earned on bills, spendable a day after staff verify the
 payment, up to half of any later bill, expiring after 90 days — `/wallet`), **table deposits** some
 restaurants ask for at peak times (credited to the bill; refunded if cancelled 24 h ahead, kept on
 late cancellations and no-shows), **bank offers** funded by a bank on its cards and UPI, **phone
 sign-in** by SMS code, **platform codes & bank offers** admin at `/admin/offers`, and **Razorpay
-Route** payouts to a restaurant's linked account (`RAZORPAY_ROUTE_ENABLED`).
+Route** payouts to a restaurant's linked account (`RAZORPAY_ROUTE_ENABLED`), **multi-city** (a
+remembered city picker; Jaipur and Delhi are seeded), and on www.tixit.in a "Dinner before the
+show?" rail, "Eat nearby" on event pages and the Wallet on the account page.
 
 Diners get emails for every booking change (confirmed, request sent, accepted, declined, cancelled),
 a reminder about two hours before their table, and an itemised receipt for each bill paid.

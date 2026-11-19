@@ -331,10 +331,12 @@ async function handlePaymentCaptured(entity: Record<string, unknown>): Promise<v
     bill_payment_id: string | null;
     reservation_id: string | null;
     bill_share_id: string | null;
+    membership_id: string | null;
     status: string;
     amount_paise: number;
   }>(
-    'SELECT id, booking_id, bill_payment_id, reservation_id, bill_share_id, status, amount_paise FROM payments WHERE provider_order_id = $1',
+    `SELECT id, booking_id, bill_payment_id, reservation_id, bill_share_id, membership_id, status, amount_paise
+       FROM payments WHERE provider_order_id = $1`,
     [orderId],
   );
   if (!payment) {
@@ -362,6 +364,10 @@ async function handlePaymentCaptured(entity: Record<string, unknown>): Promise<v
   }
   if (payment.bill_share_id) {
     await paymentSubjectHandler('bill_share').captured(payment.bill_share_id, context);
+    return;
+  }
+  if (payment.membership_id) {
+    await paymentSubjectHandler('membership').captured(payment.membership_id, context);
     return;
   }
   if (!payment.booking_id) return;

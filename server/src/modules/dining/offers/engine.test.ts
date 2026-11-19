@@ -219,3 +219,19 @@ describe('payment pass verification code', () => {
     expect(codeAt(newVerifySecret(), at).code).not.toBe(codeAt(newVerifySecret(), at).code);
   });
 });
+
+describe('Tixit Pass', () => {
+  it('waives the platform fee for members and says so on the receipt', () => {
+    const member = priceBill(input({ feeWaived: true }));
+    const guest = priceBill(input());
+    expect(member.convenienceFeePaise).toBe(0);
+    expect(member.convenienceFeeGstPaise).toBe(0);
+    expect(member.feeWaivedPaise).toBe(1000);
+    expect(member.amountPayablePaise).toBe(guest.amountPayablePaise - 1000);
+    expect(member.lines.find((line) => line.key === 'fee_waived')).toMatchObject({ amountPaise: 0 });
+    expect(member.lines.some((line) => line.key === 'fee')).toBe(false);
+    // The restaurant is paid exactly the same either way.
+    expect(member.restaurantPayoutPaise).toBe(guest.restaurantPayoutPaise);
+    expectBalanced(member);
+  });
+});

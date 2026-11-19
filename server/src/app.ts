@@ -26,6 +26,7 @@ import diningRoutes from './modules/dining/dining.routes';
 import partnerRoutes from './modules/dining/partner/partner.routes';
 import diningAdminRoutes from './modules/dining/admin/dining-admin.routes';
 import walletRoutes from './modules/finance/wallet.routes';
+import passRoutes from './modules/pass/pass.routes';
 import { privacyAdminRoutes, privacyRoutes } from './modules/privacy/privacy.routes';
 
 export function createApp(): Express {
@@ -158,6 +159,7 @@ export function createApp(): Express {
   api.use('/dining', diningRoutes);
   api.use('/partner', partnerRoutes);
   api.use('/wallet', walletRoutes);
+  api.use('/pass', passRoutes);
   api.use('/privacy', privacyRoutes);
 
   api.get('/', (_req, res) =>

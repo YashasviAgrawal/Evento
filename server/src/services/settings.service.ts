@@ -29,6 +29,10 @@ export interface PlatformSettings {
   dining_cashback_expiry_days: number;
   /** At most this % of a bill (before the fee) can be paid from the Tixit Wallet. */
   dining_wallet_max_redeem_percent: number;
+  /** Tixit Pass: price (GST inclusive), length, and the cashback multiplier members earn. */
+  pass_price_paise: number;
+  pass_days: number;
+  pass_cashback_multiplier: number;
 }
 
 const DEFAULTS: PlatformSettings = {
@@ -48,6 +52,9 @@ const DEFAULTS: PlatformSettings = {
   dining_cashback_release_hours: 24,
   dining_cashback_expiry_days: 90,
   dining_wallet_max_redeem_percent: 50,
+  pass_price_paise: 19_900,
+  pass_days: 90,
+  pass_cashback_multiplier: 2,
 };
 
 const CACHE_TTL_MS = 30_000;

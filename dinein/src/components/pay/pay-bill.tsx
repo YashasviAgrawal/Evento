@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CalendarCheck2, Check, CreditCard, Delete, Lock, TicketPercent, Users, X } from 'lucide-react';
+import { ArrowLeft, CalendarCheck2, Check, ChevronRight, CreditCard, Crown, Delete, Lock, TicketPercent, Users, X } from 'lucide-react';
 import { ApiError, api, openCheckout, PAYMENT_CANCELLED, useAuth } from '@tixit/session';
 import { useToast } from '@tixit/ui';
 import type { Bill, BillCheckout, BillQuote, Reservation } from '@/lib/types';
@@ -320,6 +320,16 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
                   </ul>
                   {bankOfferId && pricing.bankOfferError && <p className="mt-2 text-xs font-semibold text-rose-600">{pricing.bankOfferError}</p>}
                 </div>
+              )}
+
+              {pricing.convenienceFeePaise > 0 && (
+                <Link href="/pass" className="flex items-center gap-3 rounded-2xl bg-white p-3.5 text-sm ring-1 ring-ink-200 hover:ring-ink-300">
+                  <Crown className="h-5 w-5 shrink-0 text-brand-600" />
+                  <span className="flex-1">
+                    <b>Skip the {rupees(pricing.convenienceFeePaise)} fee</b> on every bill, and earn extra cashback, with Tixit Pass
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-ink-400" />
+                </Link>
               )}
 
               <SplitCard pricing={pricing.amountPayablePaise} value={splitInto} onChange={setSplitInto} hasBankOffers={Boolean(quote.data?.bankOptions.length)} />

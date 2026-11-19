@@ -13,6 +13,7 @@ import * as bills from './bills/bill.service';
 import * as split from './bills/split.service';
 import * as reviews from './reviews.service';
 import { getPublicMenu } from './menu/menu.service';
+import * as festivals from './festivals/festival.service';
 import * as cover from './reservations/cover.service';
 // Registers the outbox handlers for dine-in emails.
 import './notifications';
@@ -30,7 +31,11 @@ const bool = z
 router.get(
   '/home',
   validate({ query: z.object({ city: z.string().trim().min(2).max(60).default('jaipur') }) }),
-  asyncHandler(async (req, res) => ok(res, await catalog.homeFeed(String(req.query.city)))),
+  asyncHandler(async (req, res) => {
+    const city = String(req.query.city);
+    const [feed, current] = await Promise.all([catalog.homeFeed(city), festivals.currentFestivals(city)]);
+    return ok(res, { ...feed, festivals: current });
+  }),
 );
 
 router.get(
@@ -96,6 +101,12 @@ router.get(
 );
 
 router.get('/cities', asyncHandler(async (_req, res) => ok(res, await catalog.listCities())));
+
+router.get(
+  '/festivals/:slug',
+  validate({ params: z.object({ slug: z.string().min(1).max(120) }) }),
+  asyncHandler(async (req, res) => ok(res, await festivals.getFestival(req.params.slug!))),
+);
 
 /* ───────────────────────── bills (quote is public) ───────────────────────── */
 

@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ExternalLink, FileText, Images, Inbox, LogOut, ShieldAlert, Store, Tag } from 'lucide-react';
+import { ExternalLink, FileText, Images, Inbox, Megaphone, LogOut, ShieldAlert, Store, Tag } from 'lucide-react';
 import { useAuth } from '@tixit/session';
 import { cn } from '@/lib/format';
 import { EVENTS_URL } from '@/lib/urls';
@@ -53,6 +53,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           {[
             { href: '/admin', label: 'Restaurants', icon: Store, active: pathname === '/admin' || /^\/admin\/[0-9a-f-]{36}/.test(pathname) },
             { href: '/admin/offers', label: 'Codes & bank offers', icon: Tag, active: pathname.startsWith('/admin/offers') },
+            { href: '/admin/campaigns', label: 'Campaigns', icon: Megaphone, active: pathname.startsWith('/admin/campaigns') },
             { href: '/admin/invoices', label: 'Invoices', icon: FileText, active: pathname.startsWith('/admin/invoices') },
             { href: '/admin/photos', label: 'Diner photos', icon: Images, active: pathname.startsWith('/admin/photos') },
             { href: '/admin/desk', label: 'Grievances & privacy', icon: Inbox, active: pathname.startsWith('/admin/desk') },
@@ -79,6 +80,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <span className="scrollbar-none flex max-w-full gap-1.5 overflow-x-auto">
             <Link href="/admin" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Restaurants</Link>
             <Link href="/admin/offers" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Offers</Link>
+            <Link href="/admin/campaigns" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Campaigns</Link>
             <Link href="/admin/invoices" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Invoices</Link>
             <Link href="/admin/photos" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Photos</Link>
             <Link href="/admin/desk" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Desk</Link>
