@@ -153,6 +153,15 @@ export const env = {
   },
 
   /** Published on the grievance page, as the IT and consumer-protection rules require. */
+  /** Who issues commission invoices to restaurants. */
+  supplier: {
+    legalName: str('SUPPLIER_LEGAL_NAME', 'Tixit'),
+    gstin: optional('SUPPLIER_GSTIN'),
+    address: str('SUPPLIER_ADDRESS', 'Jaipur, Rajasthan, India'),
+    /** GST state code of the registered place of business; the GSTIN's first two digits win when set. */
+    stateCode: str('SUPPLIER_STATE_CODE', '08'),
+  },
+
   grievanceOfficer: {
     name: str('GRIEVANCE_OFFICER_NAME', 'Grievance Officer, Tixit'),
     email: str('GRIEVANCE_OFFICER_EMAIL', 'grievance@tixit.in'),

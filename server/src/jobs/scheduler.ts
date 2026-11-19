@@ -8,6 +8,7 @@ import { sendMail } from '../services/mail.service';
 import { formatEventDate } from '../utils/dates';
 import { autoVerifyStaleBills, cancelAbandonedBills } from '../modules/dining/bills/bill.service';
 import { expireSplits } from '../modules/dining/bills/split.service';
+import { invoicePreviousMonth } from '../modules/dining/invoices/invoice.service';
 import { sendReservationReminders } from '../modules/dining/notifications';
 import { dispatchOutbox } from '../modules/platform/outbox';
 import { expireUnpaidHolds } from '../modules/dining/reservations/reservation.service';
@@ -146,6 +147,8 @@ export function startScheduler(): void {
   });
   every('dining-cancel-abandoned-bills', 15 * 60_000, cancelAbandonedBills);
   every('dining-expire-splits', 60_000, expireSplits);
+  // Idempotent; runs through the first days of a month so a missed day is caught up.
+  every('dining-commission-invoices', 6 * 60 * 60_000, invoicePreviousMonth);
   every('outbox-dispatch', 5_000, dispatchOutbox);
   every('dining-expire-deposit-holds', 60_000, expireUnpaidHolds);
   every('wallet-release-cashback', 10 * 60_000, releaseCashback);

@@ -6,6 +6,8 @@ import { asyncHandler, ok } from '../../../utils/http';
 import { audit } from '../../../services/audit.service';
 import * as admin from './dining-admin.service';
 import * as reviews from '../reviews.service';
+import * as invoices from '../invoices/invoice.service';
+import { sendInvoicePdf } from '../invoices/invoice.pdf';
 import { onTransferEvent } from '../../payments/payment.service';
 
 onTransferEvent(admin.onTransferEvent);
@@ -160,6 +162,43 @@ router.patch(
     });
     return ok(res, { status: req.body.status });
   }),
+);
+
+/* ───────────────────────── commission invoices ───────────────────────── */
+
+const monthQuery = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/).optional() });
+
+router.get(
+  '/invoices',
+  validate({ query: monthQuery }),
+  asyncHandler(async (req, res) => {
+    const month = (req.query.month as string | undefined) ?? invoices.previousMonth();
+    return ok(res, { month, invoices: await invoices.listInvoicesForMonth(month) });
+  }),
+);
+
+router.post(
+  '/invoices/generate',
+  validate({ body: z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }) }),
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req);
+    const result = await invoices.generateInvoices(req.body.month);
+    await audit({
+      actorId: user.id,
+      actorRole: user.role,
+      action: 'dining.invoices.generated',
+      entityType: 'finance.invoice',
+      entityId: null,
+      metadata: { month: req.body.month, ...result },
+    });
+    return ok(res, result);
+  }),
+);
+
+router.get(
+  '/invoices/:id/pdf',
+  validate({ params: idParam }),
+  asyncHandler(async (req, res) => sendInvoicePdf(res, await invoices.getInvoice(req.params.id!))),
 );
 
 export default router;

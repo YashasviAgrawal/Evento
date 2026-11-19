@@ -428,6 +428,8 @@ export interface AdminRestaurant {
   commissionPercent: number;
   serviceChargePercent: number;
   gstin: string | null;
+  legalName: string | null;
+  billingAddress: string | null;
   fssai: string | null;
   razorpayAccountId: string | null;
   routePayouts: boolean;
@@ -440,4 +442,29 @@ export interface AdminRestaurant {
 export interface AdminOffer extends Offer {
   redemptions: number;
   discountGivenPaise: number;
+}
+
+export interface InvoiceParty {
+  legalName: string;
+  gstin: string | null;
+  address: string;
+  stateCode: string;
+  stateName: string;
+}
+
+export interface CommissionInvoice {
+  id: string;
+  number: string;
+  kind: 'tax_invoice' | 'statement';
+  periodStart: string;
+  periodEnd: string;
+  issuedAt: string;
+  recipient: InvoiceParty;
+  placeOfSupply: string;
+  taxablePaise: number;
+  cgstPaise: number;
+  sgstPaise: number;
+  igstPaise: number;
+  totalPaise: number;
+  restaurant: { id: string; name: string };
 }

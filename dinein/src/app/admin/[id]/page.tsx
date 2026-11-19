@@ -37,7 +37,15 @@ export default function AdminRestaurantPage({ params }: { params: Promise<{ id: 
   const key = ['admin-restaurant', id];
   const { data, isLoading } = useQuery({ queryKey: key, queryFn: async () => (await api.get<AdminRestaurant>(`/admin/dining/restaurants/${id}`)).data });
 
-  const [commercials, setCommercials] = useState({ commissionPercent: '', serviceChargePercent: '', gstin: '', fssai: '', razorpayAccountId: '' });
+  const [commercials, setCommercials] = useState({
+    commissionPercent: '',
+    serviceChargePercent: '',
+    gstin: '',
+    fssai: '',
+    razorpayAccountId: '',
+    legalName: '',
+    billingAddress: '',
+  });
   const [member, setMember] = useState({ email: '', role: 'manager' });
   const [payout, setPayout] = useState({ amount: '', utr: '' });
 
@@ -49,6 +57,8 @@ export default function AdminRestaurantPage({ params }: { params: Promise<{ id: 
         gstin: data.gstin ?? '',
         fssai: data.fssai ?? '',
         razorpayAccountId: data.razorpayAccountId ?? '',
+        legalName: data.legalName ?? '',
+        billingAddress: data.billingAddress ?? '',
       });
     }
   }, [data]);
@@ -74,6 +84,8 @@ export default function AdminRestaurantPage({ params }: { params: Promise<{ id: 
         gstin: commercials.gstin || null,
         fssai: commercials.fssai || null,
         razorpayAccountId: commercials.razorpayAccountId || null,
+        legalName: commercials.legalName || null,
+        billingAddress: commercials.billingAddress || null,
       }),
     onSuccess: () => {
       toast.success('Commercials saved', 'New bills use the new commission; past bills keep theirs.');
@@ -166,9 +178,11 @@ export default function AdminRestaurantPage({ params }: { params: Promise<{ id: 
                 ['gstin', 'GSTIN'],
                 ['fssai', 'FSSAI'],
                 ['razorpayAccountId', 'Razorpay linked account (acc_…)'],
+                ['legalName', 'Legal name (for invoices)'],
+                ['billingAddress', 'Billing address'],
               ] as const
             ).map(([k, label]) => (
-              <div key={k}>
+              <div key={k} className={k === 'billingAddress' || k === 'legalName' ? 'col-span-2' : undefined}>
                 <label className="label" htmlFor={k}>{label}</label>
                 <input id={k} className="input" value={commercials[k]} onChange={(e) => setCommercials((c) => ({ ...c, [k]: e.target.value }))} />
               </div>

@@ -4,11 +4,12 @@ import { use } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowDownLeft, ArrowUpRight, Landmark } from 'lucide-react';
 import { api } from '@tixit/session';
-import type { Payouts } from '@/lib/types';
+import type { CommissionInvoice, Payouts } from '@/lib/types';
 import { cn, compactRupees, dateTime, rupees } from '@/lib/format';
 import { PageHeading } from '@/components/partner/partner-shell';
 import { Skeleton } from '@/components/ui/feedback';
 import { usePartnerRestaurant } from '@/components/partner/use-partner';
+import { InvoiceList } from '@/components/finance/invoice-list';
 
 export default function PartnerPayoutsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -25,6 +26,11 @@ export default function PartnerPayoutsPage({ params }: { params: Promise<{ id: s
     enabled: Boolean(canSeeInsights),
   });
 
+  const invoices = useQuery({
+    queryKey: ['partner-invoices', id],
+    queryFn: async () => (await api.get<CommissionInvoice[]>(`/partner/r/${id}/invoices`)).data,
+  });
+
   const trend = insights.data?.trend ?? [];
   const peak = Math.max(1, ...trend.map((d) => d.grossPaise));
 
@@ -32,7 +38,7 @@ export default function PartnerPayoutsPage({ params }: { params: Promise<{ id: s
     <>
       <PageHeading title="Payouts" subtitle="Straight from the ledger — every rupee accounted for." />
       <div className="grid gap-4 px-4 pb-10 pt-5 sm:px-8 lg:grid-cols-[1fr_1.2fr]">
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <div className="night rounded-[28px] p-6">
             <p className="eyebrow text-brand-300">Due to you</p>
             {payouts.isLoading ? (
@@ -62,6 +68,14 @@ export default function PartnerPayoutsPage({ params }: { params: Promise<{ id: s
             </div>
           )}
 
+          {(invoices.data ?? []).length > 0 && (
+            <div className="rounded-3xl bg-white p-5 ring-1 ring-ink-200">
+              <p className="eyebrow text-ink-400">Commission invoices</p>
+              <p className="mt-1 text-xs text-ink-500">Monthly, for your GST input credit. Already deducted from payouts.</p>
+              <InvoiceList invoices={invoices.data!} pdfPath={(invoice) => `/partner/r/${id}/invoices/${invoice.id}/pdf`} />
+            </div>
+          )}
+
           {(payouts.data?.settlements ?? []).length > 0 && (
             <div className="rounded-3xl bg-white p-5 ring-1 ring-ink-200">
               <p className="eyebrow text-ink-400">Settlements</p>
@@ -80,7 +94,7 @@ export default function PartnerPayoutsPage({ params }: { params: Promise<{ id: s
           )}
         </div>
 
-        <div className="rounded-3xl bg-white p-5 ring-1 ring-ink-200">
+        <div className="min-w-0 rounded-3xl bg-white p-5 ring-1 ring-ink-200">
           <p className="eyebrow text-ink-400">Recent activity</p>
           {payouts.isLoading ? (
             <Skeleton className="mt-3 h-64" />

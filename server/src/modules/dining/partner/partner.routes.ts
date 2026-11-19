@@ -13,6 +13,8 @@ import * as offers from '../offers/offer.service';
 import * as availability from './availability-admin.service';
 import * as menu from '../menu/menu.service';
 import * as reviews from '../reviews.service';
+import * as invoices from '../invoices/invoice.service';
+import { sendInvoicePdf } from '../invoices/invoice.pdf';
 import { uploadLimiter } from '../../../middleware/rateLimit';
 import { imageUpload, storeImage } from '../../../services/storage.service';
 
@@ -297,6 +299,22 @@ router.put(
     await reviews.replyToReview(req.restaurant!.id, req.params.reviewId!, req.body.reply);
     return ok(res, { replied: Boolean(req.body.reply) });
   }),
+);
+
+/* ───────────────────────── invoices ───────────────────────── */
+
+router.get(
+  '/r/:restaurantId/invoices',
+  requireRestaurantAccess('payouts.view'),
+  validate({ params: restaurantParam }),
+  asyncHandler(async (req, res) => ok(res, await invoices.listInvoicesForRestaurant(req.restaurant!.id))),
+);
+
+router.get(
+  '/r/:restaurantId/invoices/:invoiceId/pdf',
+  requireRestaurantAccess('payouts.view'),
+  validate({ params: restaurantParam.extend({ invoiceId: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => sendInvoicePdf(res, await invoices.getInvoice(req.params.invoiceId!, req.restaurant!.id))),
 );
 
 export default router;

@@ -345,7 +345,7 @@ export async function seedDining(users: { adminId: string; customerIds: string[]
         seed.rating[0],
         seed.rating[1],
         seed.featured ?? false,
-        `08AAB${String(1000 + index)}F1Z${index % 10}`,
+        `08AABCE${String(1000 + index)}F1Z${index % 10}`,
         `1222101900${String(1000 + index)}`,
       ],
     );
@@ -492,7 +492,8 @@ async function seedHistory(restaurantIds: string[], customerIds: string[]): Prom
     for (let i = 0; i < 4; i += 1) {
       const userId = customerIds[(n + i) % customerIds.length]!;
       const bill = 120_000 + ((n * 37_000 + i * 21_000) % 380_000);
-      const paidAt = new Date(Date.now() - (2 + n * 3 + i) * 86_400_000);
+      // Spread over about six weeks so last month has history to invoice.
+      const paidAt = new Date(Date.now() - (2 + n * 3 + i * 9) * 86_400_000);
       const pricing = priceBill({
         billTotalPaise: bill,
         nonDiscountablePaise: 0,

@@ -6,9 +6,19 @@ import { OFFER_COLUMNS, toPublicOffer, type OfferRow } from '../offers/offer.ser
 import { rupeesToPaise } from '../../../utils/money';
 import { liabilityBalance, PLATFORM, post, restaurantPayable } from '../../finance/ledger';
 import { env } from '../../../config/env';
+import { GSTIN_PATTERN } from '../../../utils/gst';
 import * as gateway from '../../../services/razorpay.provider';
 
 /* ─────────────────────── onboarding ─────────────────────── */
+
+/** Upper-cased and checked; an empty field clears it. */
+const gstinField = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .transform((value) => value || null)
+  .refine((value) => value === null || GSTIN_PATTERN.test(value), 'A GSTIN has 15 characters, like 08ABCDE1234F1Z5')
+  .nullish();
 
 export const restaurantInput = z.object({
   name: z.string().trim().min(2).max(120),
@@ -25,7 +35,7 @@ export const restaurantInput = z.object({
   coverUrl: z.string().url().nullish(),
   commissionPercent: z.coerce.number().min(0).max(30).default(6),
   serviceChargePercent: z.coerce.number().min(0).max(20).default(0),
-  gstin: z.string().trim().max(20).nullish(),
+  gstin: gstinField,
   fssai: z.string().trim().max(20).nullish(),
   ownerEmail: z.string().email().nullish(),
 });
@@ -261,9 +271,11 @@ export async function getRestaurantForAdmin(id: string) {
     city: string;
     created_at: Date;
     razorpay_account_id: string | null;
+    legal_name: string | null;
+    billing_address: string | null;
   }>(
     `SELECT r.id, r.slug, r.name, r.locality, r.address, r.status, r.commission_bps, r.service_charge_percent,
-            r.gstin, r.fssai, r.cover_url, c.name AS city, r.created_at, r.razorpay_account_id
+            r.gstin, r.fssai, r.cover_url, c.name AS city, r.created_at, r.razorpay_account_id, r.legal_name, r.billing_address
        FROM dining.restaurants r JOIN cities c ON c.id = r.city_id WHERE r.id = $1`,
     [id],
   );
@@ -300,6 +312,8 @@ export async function getRestaurantForAdmin(id: string) {
     serviceChargePercent: Number(row.service_charge_percent),
     gstin: row.gstin,
     fssai: row.fssai,
+    legalName: row.legal_name,
+    billingAddress: row.billing_address,
     razorpayAccountId: row.razorpay_account_id,
     /** Payouts go out as Route transfers when this is true. */
     routePayouts: env.razorpay.routeEnabled && Boolean(row.razorpay_account_id),
@@ -317,7 +331,9 @@ export async function getRestaurantForAdmin(id: string) {
 export const commercialsInput = z.object({
   commissionPercent: z.coerce.number().min(0).max(30).optional(),
   serviceChargePercent: z.coerce.number().min(0).max(20).optional(),
-  gstin: z.string().trim().max(20).nullish(),
+  gstin: gstinField,
+  legalName: z.string().trim().max(160).nullish(),
+  billingAddress: z.string().trim().max(400).nullish(),
   fssai: z.string().trim().max(20).nullish(),
   razorpayAccountId: z.string().trim().regex(/^acc_[A-Za-z0-9]{6,}$/, 'Linked account ids look like acc_XXXXXXXX').nullish(),
 });
@@ -333,7 +349,9 @@ export async function updateCommercials(id: string, input: z.infer<typeof commer
        service_charge_percent = COALESCE($3, service_charge_percent),
        gstin = CASE WHEN $4::boolean THEN $5 ELSE gstin END,
        fssai = CASE WHEN $6::boolean THEN $7 ELSE fssai END,
-       razorpay_account_id = CASE WHEN $8::boolean THEN $9 ELSE razorpay_account_id END
+       razorpay_account_id = CASE WHEN $8::boolean THEN $9 ELSE razorpay_account_id END,
+       legal_name = CASE WHEN $10::boolean THEN $11 ELSE legal_name END,
+       billing_address = CASE WHEN $12::boolean THEN $13 ELSE billing_address END
      WHERE id = $1`,
     [
       id,
@@ -345,6 +363,10 @@ export async function updateCommercials(id: string, input: z.infer<typeof commer
       input.fssai ?? null,
       input.razorpayAccountId !== undefined,
       input.razorpayAccountId ?? null,
+      input.legalName !== undefined,
+      input.legalName || null,
+      input.billingAddress !== undefined,
+      input.billingAddress || null,
     ],
   );
   if (!rowCount) throw new NotFoundError('Restaurant');
