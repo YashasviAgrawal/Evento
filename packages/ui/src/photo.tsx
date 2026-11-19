@@ -22,6 +22,7 @@ export function Photo({
   imageClassName,
   sizes = '100vw',
   priority = false,
+  fallback = true,
   children,
 }: {
   src: string | null | undefined;
@@ -30,11 +31,13 @@ export function Photo({
   imageClassName?: string;
   sizes?: string;
   priority?: boolean;
+  /** Draw the brand gradient behind the image (off for letterboxed viewers). */
+  fallback?: boolean;
   children?: React.ReactNode;
 }) {
   const [state, setState] = useState<'loading' | 'loaded' | 'failed'>('loading');
   return (
-    <div className={cn('relative overflow-hidden', className)} style={FALLBACK}>
+    <div className={cn('relative overflow-hidden', className)} style={fallback ? FALLBACK : undefined}>
       {src && state !== 'failed' && (
         <Image
           src={src}

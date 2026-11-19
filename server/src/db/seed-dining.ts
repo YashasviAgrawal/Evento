@@ -11,6 +11,7 @@ import { toEngineOffer, activeRestaurantOffers } from '../modules/dining/offers/
 import { newVerifySecret } from '../modules/dining/bills/verification';
 import { markBillPaid } from '../modules/dining/bills/bill.service';
 import { toLocalMoment } from '../modules/dining/time';
+import { seedMenus } from './seed-menus';
 import { PLATFORM, post } from '../modules/finance/ledger';
 
 const img = (id: string, w = 1200) => `https://images.unsplash.com/${id}?w=${w}&q=75&auto=format&fit=crop`;
@@ -438,6 +439,7 @@ export async function seedDining(users: { adminId: string; customerIds: string[]
   // A peak-time table deposit at the rooftop: ₹250 a guest, credited to the bill.
   await query(`UPDATE dining.restaurants SET cover_charge_paise = 25000 WHERE id = $1`, [restaurantIds[1]]);
 
+  await seedMenus(restaurantIds.map((id, i) => ({ id, cuisines: RESTAURANTS[i]!.cuisines })));
   await seedHistory(restaurantIds.slice(0, 6), users.customerIds);
 
   // A little spendable cashback for the demo diner, through the real ledger.
@@ -544,11 +546,23 @@ async function seedHistory(restaurantIds: string[], customerIds: string[]): Prom
       );
       if (i < 2) {
         const [rating, body] = reviews[(n + i) % reviews.length]!;
-        await query(
-          `INSERT INTO dining.reviews (bill_payment_id, user_id, restaurant_id, rating, body, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [id, userId, restaurantId, rating, body, paidAt],
+        const review = await queryOne<{ id: string }>(
+          `INSERT INTO dining.reviews (bill_payment_id, user_id, restaurant_id, rating, body, created_at, reply, replied_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $7::text IS NULL THEN NULL ELSE $6::timestamptz + interval '1 day' END)
+           RETURNING id`,
+          [id, userId, restaurantId, rating, body, paidAt, i === 0 ? 'Thank you — see you again soon!' : null],
         );
+        // Diner photos on the first review of each restaurant. The 'seed'
+        // public id matches no stored file, so deleting one removes nothing.
+        if (i === 0) {
+          for (const photo of [FOOD[n % FOOD.length]!, FOOD[(n + 3) % FOOD.length]!]) {
+            await query(
+              `INSERT INTO dining.review_photos (review_id, restaurant_id, user_id, url, public_id, provider, created_at)
+               VALUES ($1, $2, $3, $4, 'seed', 'local', $5)`,
+              [review!.id, restaurantId, userId, img(photo, 800), paidAt],
+            );
+          }
+        }
       }
     }
     n += 1;

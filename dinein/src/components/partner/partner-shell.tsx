@@ -3,7 +3,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeftRight, CalendarDays, Clock3, ExternalLink, LogOut, Tag, Wallet, Zap } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeftRight, BookOpen, CalendarDays, Clock3, ExternalLink, LogOut, MessageSquareText, MoreHorizontal, Tag, Wallet, Zap } from 'lucide-react';
 import { useAuth } from '@tixit/session';
 import type { Capability, PartnerRestaurant } from '@/lib/types';
 import { cn } from '@/lib/format';
@@ -12,6 +13,8 @@ const NAV: Array<{ href: string; label: string; icon: typeof Zap; needs: Capabil
   { href: '', label: 'Live', icon: Zap, needs: 'bills.verify' },
   { href: '/reservations', label: 'Reservations', icon: CalendarDays, needs: 'reservations.manage' },
   { href: '/offers', label: 'Offers', icon: Tag, needs: 'offers.manage' },
+  { href: '/menu', label: 'Menu', icon: BookOpen, needs: 'menu.manage' },
+  { href: '/reviews', label: 'Reviews', icon: MessageSquareText, needs: 'reviews.manage' },
   { href: '/availability', label: 'Hours', icon: Clock3, needs: 'availability.manage' },
   { href: '/payouts', label: 'Payouts', icon: Wallet, needs: 'payouts.view' },
 ];
@@ -36,6 +39,12 @@ export function PartnerShell({
   const { signOut } = useAuth();
   const base = `/partner/${restaurant.id}`;
   const items = NAV.filter((item) => restaurant.capabilities.includes(item.needs));
+  // A phone bar fits five targets comfortably; anything beyond goes under "More".
+  const primary = items.length > 5 ? items.slice(0, 4) : items;
+  const overflow = items.length > 5 ? items.slice(4) : [];
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => setMoreOpen(false), [pathname]);
+  const isActive = (href: string) => (href === '' ? pathname === base : pathname.startsWith(`${base}${href}`));
 
   return (
     <div className="min-h-dvh bg-ink-50 md:grid md:grid-cols-[232px_1fr]">
@@ -101,18 +110,50 @@ export function PartnerShell({
         {children}
       </div>
 
+      {moreOpen && (
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMoreOpen(false)}>
+          <ul
+            className="safe-bottom absolute bottom-16 right-3 w-48 animate-enter overflow-hidden rounded-2xl bg-white py-1 shadow-lift ring-1 ring-ink-200"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {overflow.map(({ href, label, icon: Icon }) => (
+              <li key={label}>
+                <Link
+                  href={`${base}${href}`}
+                  className={cn('flex items-center gap-3 px-4 py-3 text-sm font-semibold', isActive(href) ? 'text-brand-600' : 'text-ink-700')}
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-ink-200 bg-white/95 pt-1.5 backdrop-blur-xl md:hidden" aria-label="Partner">
-        {items.map(({ href, label, icon: Icon }) => {
-          const target = `${base}${href}`;
-          const active = href === '' ? pathname === base : pathname.startsWith(target);
+        {primary.map(({ href, label, icon: Icon }) => {
+          const active = isActive(href);
           return (
-            <Link key={label} href={target} className={cn('relative flex w-16 flex-col items-center gap-1 pb-1 text-[11px] font-semibold', active ? 'text-brand-600' : 'text-ink-400')}>
+            <Link key={label} href={`${base}${href}`} className={cn('relative flex w-16 flex-col items-center gap-1 pb-1 text-[11px] font-semibold', active ? 'text-brand-600' : 'text-ink-400')}>
               <Icon className="h-5 w-5" />
               {label}
               {href === '' && badge ? <span className="absolute right-4 top-0 h-2 w-2 rounded-full bg-brand-600" /> : null}
             </Link>
           );
         })}
+        {overflow.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setMoreOpen((open) => !open)}
+            aria-expanded={moreOpen}
+            className={cn(
+              'flex w-16 flex-col items-center gap-1 pb-1 text-[11px] font-semibold',
+              moreOpen || overflow.some((item) => isActive(item.href)) ? 'text-brand-600' : 'text-ink-400',
+            )}
+          >
+            <MoreHorizontal className="h-5 w-5" />
+            More
+          </button>
+        )}
       </nav>
     </div>
   );

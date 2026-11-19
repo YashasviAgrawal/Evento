@@ -11,6 +11,7 @@ import { cn, dateTime, rupees } from '@/lib/format';
 import { Photo } from '@/components/ui/photo';
 import { Spinner } from '@/components/ui/feedback';
 import { Receipt } from './receipt';
+import { PhotoPicker, uploadReviewPhotos, type PickedPhoto } from '@/components/review/photo-picker';
 
 const RING = 2 * Math.PI * 96;
 
@@ -211,13 +212,16 @@ function AfterPayment({ bill }: { bill: Bill }) {
   const [body, setBody] = useState('');
   const [sent, setSent] = useState(!bill.canReview);
   const [sending, setSending] = useState(false);
+  const [photos, setPhotos] = useState<PickedPhoto[]>([]);
 
   async function submit() {
     setSending(true);
     try {
-      await api.post('/dining/reviews', { billCode: bill.code, rating, body: body.trim() || null });
+      const { data } = await api.post<{ id: string }>('/dining/reviews', { billCode: bill.code, rating, body: body.trim() || null });
+      const failed = photos.length ? await uploadReviewPhotos(data.id, photos) : 0;
       setSent(true);
-      toast.success('Thanks for the review');
+      if (failed) toast.error('Review posted', `${failed} photo${failed > 1 ? 's' : ''} could not be uploaded.`);
+      else toast.success('Thanks for the review');
     } catch (error) {
       toast.error('Could not save your review', error instanceof Error ? error.message : undefined);
     } finally {
@@ -253,12 +257,13 @@ function AfterPayment({ bill }: { bill: Bill }) {
                 placeholder="What stood out? (optional)"
                 className="input mt-3 resize-none text-sm"
               />
+              <PhotoPicker photos={photos} onChange={setPhotos} />
               <button
                 onClick={submit}
                 disabled={sending}
                 className="press mt-3 h-12 w-full rounded-2xl bg-ink-900 text-sm font-bold text-white disabled:opacity-60"
               >
-                {sending ? 'Saving…' : 'Post review'}
+                {sending ? (photos.length ? 'Uploading photos…' : 'Saving…') : 'Post review'}
               </button>
             </div>
           )}

@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ExternalLink, Inbox, LogOut, ShieldAlert, Store, Tag } from 'lucide-react';
+import { ExternalLink, Images, Inbox, LogOut, ShieldAlert, Store, Tag } from 'lucide-react';
 import { useAuth } from '@tixit/session';
 import { cn } from '@/lib/format';
 import { EVENTS_URL } from '@/lib/urls';
@@ -53,6 +53,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           {[
             { href: '/admin', label: 'Restaurants', icon: Store, active: pathname === '/admin' || /^\/admin\/[0-9a-f-]{36}/.test(pathname) },
             { href: '/admin/offers', label: 'Codes & bank offers', icon: Tag, active: pathname.startsWith('/admin/offers') },
+            { href: '/admin/photos', label: 'Diner photos', icon: Images, active: pathname.startsWith('/admin/photos') },
             { href: '/admin/desk', label: 'Grievances & privacy', icon: Inbox, active: pathname.startsWith('/admin/desk') },
           ].map(({ href, label, icon: Icon, active }) => (
             <Link
@@ -72,11 +73,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </button>
       </aside>
       <div className="min-w-0">
-        <header className="night flex items-center justify-between px-4 py-3 md:hidden">
+        <header className="night flex flex-wrap items-center justify-between gap-2 px-4 py-3 md:hidden">
           <p className="font-bold">Tixit Admin · Dine-in</p>
-          <span className="flex gap-1.5">
+          <span className="scrollbar-none flex max-w-full gap-1.5 overflow-x-auto">
             <Link href="/admin" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Restaurants</Link>
             <Link href="/admin/offers" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Offers</Link>
+            <Link href="/admin/photos" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Photos</Link>
             <Link href="/admin/desk" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Desk</Link>
           </span>
         </header>

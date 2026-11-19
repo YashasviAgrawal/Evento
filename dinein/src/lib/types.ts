@@ -76,8 +76,46 @@ export interface RestaurantDetail extends RestaurantCard {
   timezone: string;
   gallery: Array<{ kind: string; url: string; caption: string | null }>;
   offers: Offer[];
-  reviews: Array<{ rating: number; body: string | null; reply: string | null; createdAt: string; author: string }>;
+  reviews: Array<{
+    id: string;
+    rating: number;
+    body: string | null;
+    reply: string | null;
+    createdAt: string;
+    author: string;
+    photos: ReviewPhoto[];
+  }>;
+  dinerPhotos: Array<ReviewPhoto & { author: string; createdAt: string }>;
+  menuItemCount: number;
   ratingDistribution: Array<{ stars: number; count: number }>;
+}
+
+export interface ReviewPhoto {
+  id: string;
+  url: string;
+}
+
+export type Diet = 'veg' | 'non_veg' | 'egg' | 'vegan';
+export type MenuBadge = 'bestseller' | 'chef_special' | 'new' | 'signature';
+
+export interface MenuItem {
+  id: string;
+  sectionId: string;
+  name: string;
+  description: string | null;
+  pricePaise: number;
+  diet: Diet;
+  spiceLevel: number;
+  badges: MenuBadge[];
+  imageUrl: string | null;
+  isAvailable: boolean;
+}
+
+export interface MenuSection {
+  id: string;
+  name: string;
+  description: string | null;
+  items: MenuItem[];
 }
 
 export interface HomeFeed {
@@ -255,6 +293,8 @@ export type Capability =
   | 'reservations.manage'
   | 'offers.manage'
   | 'availability.manage'
+  | 'menu.manage'
+  | 'reviews.manage'
   | 'payouts.view'
   | 'insights.view';
 

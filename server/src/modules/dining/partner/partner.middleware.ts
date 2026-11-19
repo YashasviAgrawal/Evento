@@ -14,6 +14,8 @@ export const CAPABILITIES = {
   'reservations.manage': ['owner', 'manager', 'host'],
   'offers.manage': ['owner', 'manager'],
   'availability.manage': ['owner', 'manager'],
+  'menu.manage': ['owner', 'manager'],
+  'reviews.manage': ['owner', 'manager'],
   'payouts.view': ['owner'],
   'insights.view': ['owner', 'manager'],
 } as const satisfies Record<string, readonly MemberRole[]>;

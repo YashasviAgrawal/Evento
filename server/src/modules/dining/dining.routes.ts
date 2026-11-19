@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, currentUser, optionalAuth } from '../../middleware/auth';
-import { bookingLimiter } from '../../middleware/rateLimit';
+import { bookingLimiter, uploadLimiter } from '../../middleware/rateLimit';
+import { imageUpload } from '../../services/storage.service';
 import { validate } from '../../middleware/validate';
 import { asyncHandler, ok, paginated } from '../../utils/http';
 import { localToday } from './time';
@@ -9,7 +10,8 @@ import * as catalog from './catalog/catalog.service';
 import { slotsForDate } from './reservations/availability.service';
 import * as reservations from './reservations/reservation.service';
 import * as bills from './bills/bill.service';
-import { createReview } from './reviews.service';
+import * as reviews from './reviews.service';
+import { getPublicMenu } from './menu/menu.service';
 import * as cover from './reservations/cover.service';
 // Registers the outbox handlers for dine-in emails.
 import './notifications';
@@ -59,6 +61,12 @@ router.get(
   '/restaurants/:slug',
   validate({ params: z.object({ slug: z.string().min(1).max(120) }) }),
   asyncHandler(async (req, res) => ok(res, await catalog.getRestaurant(req.params.slug!))),
+);
+
+router.get(
+  '/restaurants/:slug/menu',
+  validate({ params: z.object({ slug: z.string().min(1).max(120) }) }),
+  asyncHandler(async (req, res) => ok(res, await getPublicMenu(req.params.slug!))),
 );
 
 router.get(
@@ -144,7 +152,28 @@ router.post(
       body: z.string().trim().max(1000).nullish(),
     }),
   }),
-  asyncHandler(async (req, res) => ok(res, await createReview(currentUser(req).id, req.body), 201)),
+  asyncHandler(async (req, res) => ok(res, await reviews.createReview(currentUser(req).id, req.body), 201)),
+);
+
+const reviewParam = z.object({ reviewId: z.string().uuid() });
+
+router.post(
+  '/reviews/:reviewId/photos',
+  uploadLimiter,
+  validate({ params: reviewParam }),
+  imageUpload.single('file'),
+  asyncHandler(async (req, res) =>
+    ok(res, await reviews.addReviewPhoto(currentUser(req).id, req.params.reviewId!, req.file), 201),
+  ),
+);
+
+router.delete(
+  '/reviews/:reviewId/photos/:photoId',
+  validate({ params: reviewParam.extend({ photoId: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    await reviews.deleteReviewPhoto(currentUser(req).id, req.params.reviewId!, req.params.photoId!);
+    return ok(res, { deleted: true });
+  }),
 );
 
 /* ───────────────────────── reservations ───────────────────────── */

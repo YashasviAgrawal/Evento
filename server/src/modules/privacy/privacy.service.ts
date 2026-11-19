@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { query, queryOne, withTransaction } from '../../db/pool';
 import { NotFoundError } from '../../utils/errors';
 import { readableCode } from '../../utils/ids';
+import { deleteAllPhotosOf } from '../dining/reviews.service';
 import { sendMailAsync } from '../../services/mail.service';
 
 /** Bump when the privacy notice changes; consents record which one they answered. */
@@ -81,7 +82,12 @@ export async function exportData(userId: string) {
       [userId],
     ),
     query(`SELECT amount_paise, remaining_paise, status, available_at, expires_at, created_at FROM finance.wallet_credits WHERE user_id = $1`, [userId]),
-    query(`SELECT rating, body, created_at FROM dining.reviews WHERE user_id = $1`, [userId]),
+    query(
+      `SELECT rv.rating, rv.body, rv.created_at,
+              COALESCE((SELECT json_agg(p.url) FROM dining.review_photos p WHERE p.review_id = rv.id), '[]') AS photos
+         FROM dining.reviews rv WHERE rv.user_id = $1`,
+      [userId],
+    ),
     query(`SELECT purpose, granted, notice_version, source, created_at FROM privacy.consents WHERE user_id = $1 ORDER BY created_at`, [userId]),
     query(`SELECT reference, kind, status, created_at, resolved_at FROM privacy.requests WHERE user_id = $1`, [userId]),
     query(`SELECT created_at, user_agent, revoked_at FROM refresh_tokens WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`, [userId]),
@@ -161,6 +167,9 @@ export async function eraseAccount(userId: string): Promise<void> {
     await client.query(`UPDATE dining.reservations SET guest_name = 'Guest', guest_phone = NULL, notes = NULL, occasion = NULL WHERE user_id = $1`, [userId]);
     await client.query(`UPDATE bookings SET customer_name = 'Deleted user', customer_email = 'deleted@tixit.invalid', customer_phone = '' WHERE user_id = $1`, [userId]);
   });
+  // Photos are personal data with files behind them; removed after the commit
+  // so a rolled-back erasure never deletes files it should have kept.
+  await deleteAllPhotosOf(userId);
 }
 
 export const resolveInput = z.object({

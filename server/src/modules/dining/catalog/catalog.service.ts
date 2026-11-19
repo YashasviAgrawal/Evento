@@ -3,6 +3,7 @@ import { NotFoundError } from '../../../utils/errors';
 import { buildPageMeta, type PageMeta } from '../../../utils/http';
 import { DINING_TZ, toLocalMoment, timeToMinutes } from '../time';
 import { OFFER_COLUMNS, toPublicOffer, type OfferRow } from '../offers/offer.service';
+import { photosForReviews, shortName } from '../reviews.service';
 import { materializeSlots, upcomingSlots, type SlotView } from '../reservations/availability.service';
 
 /* ───────────────────────── shapes ───────────────────────── */
@@ -329,7 +330,7 @@ export async function getRestaurant(slug: string) {
   );
   if (!row) throw new NotFoundError('Restaurant');
 
-  const [media, offers, reviews, distribution] = await Promise.all([
+  const [media, offers, reviews, distribution, dinerPhotos, menuCount] = await Promise.all([
     query<{ kind: string; url: string; caption: string | null }>(
       'SELECT kind, url, caption FROM dining.restaurant_media WHERE restaurant_id = $1 ORDER BY sort, created_at',
       [row.id],
@@ -341,10 +342,12 @@ export async function getRestaurant(slug: string) {
         ORDER BY CASE o.applies_to WHEN 'prebook' THEN 0 WHEN 'both' THEN 1 ELSE 2 END, o.percent_off DESC NULLS LAST`,
       [row.id],
     ),
-    query<{ rating: number; body: string | null; reply: string | null; created_at: Date; full_name: string }>(
-      `SELECT rv.rating, rv.body, rv.reply, rv.created_at, u.full_name
+    query<{ id: string; rating: number; body: string | null; reply: string | null; created_at: Date; full_name: string }>(
+      `SELECT rv.id, rv.rating, rv.body, rv.reply, rv.created_at, u.full_name
          FROM dining.reviews rv JOIN users u ON u.id = rv.user_id
-        WHERE rv.restaurant_id = $1 AND rv.body IS NOT NULL
+        WHERE rv.restaurant_id = $1
+          AND (rv.body IS NOT NULL
+               OR EXISTS (SELECT 1 FROM dining.review_photos p WHERE p.review_id = rv.id AND p.status = 'visible'))
         ORDER BY rv.created_at DESC LIMIT 6`,
       [row.id],
     ),
@@ -352,7 +355,14 @@ export async function getRestaurant(slug: string) {
       'SELECT rating, count(*)::int AS count FROM dining.reviews WHERE restaurant_id = $1 GROUP BY rating',
       [row.id],
     ),
+    query<{ id: string; url: string; full_name: string; created_at: Date }>(
+      `SELECT p.id, p.url, u.full_name, p.created_at FROM dining.review_photos p JOIN users u ON u.id = p.user_id
+        WHERE p.restaurant_id = $1 AND p.status = 'visible' ORDER BY p.created_at DESC LIMIT 12`,
+      [row.id],
+    ),
+    queryOne<{ n: number }>('SELECT count(*)::int AS n FROM dining.menu_items WHERE restaurant_id = $1', [row.id]),
   ]);
+  const reviewPhotos = await photosForReviews(reviews.rows.map((review) => review.id));
 
   const state = openState(row.hours ?? {});
   return {
@@ -371,13 +381,21 @@ export async function getRestaurant(slug: string) {
     gallery: media.rows.map((m) => ({ kind: m.kind, url: m.url, caption: m.caption })),
     offers: offers.rows.map(toPublicOffer),
     reviews: reviews.rows.map((review) => ({
+      id: review.id,
       rating: review.rating,
       body: review.body,
       reply: review.reply,
       createdAt: review.created_at,
-      // First name and initial only — enough to feel human, not enough to identify.
-      author: review.full_name.split(' ').map((part, i) => (i === 0 ? part : `${part[0]}.`)).join(' '),
+      author: shortName(review.full_name),
+      photos: reviewPhotos.get(review.id) ?? [],
     })),
+    dinerPhotos: dinerPhotos.rows.map((photo) => ({
+      id: photo.id,
+      url: photo.url,
+      author: shortName(photo.full_name),
+      createdAt: photo.created_at,
+    })),
+    menuItemCount: menuCount?.n ?? 0,
     ratingDistribution: [5, 4, 3, 2, 1].map((stars) => ({
       stars,
       count: distribution.rows.find((d) => d.rating === stars)?.count ?? 0,

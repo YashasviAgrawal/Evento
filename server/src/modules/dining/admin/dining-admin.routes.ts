@@ -5,6 +5,7 @@ import { validate } from '../../../middleware/validate';
 import { asyncHandler, ok } from '../../../utils/http';
 import { audit } from '../../../services/audit.service';
 import * as admin from './dining-admin.service';
+import * as reviews from '../reviews.service';
 import { onTransferEvent } from '../../payments/payment.service';
 
 onTransferEvent(admin.onTransferEvent);
@@ -126,6 +127,37 @@ router.patch(
   validate({ params: idParam, body: z.object({ status: z.enum(['active', 'paused', 'archived']) }) }),
   asyncHandler(async (req, res) => {
     await admin.setPlatformOfferStatus(req.params.id!, req.body.status);
+    return ok(res, { status: req.body.status });
+  }),
+);
+
+/* ───────────────────────── diner photo moderation ───────────────────────── */
+
+router.get(
+  '/photos',
+  validate({ query: z.object({ status: z.enum(['visible', 'hidden']).default('visible') }) }),
+  asyncHandler(async (req, res) =>
+    ok(res, await reviews.listPhotosForModeration(req.query.status as 'visible' | 'hidden')),
+  ),
+);
+
+router.patch(
+  '/photos/:id',
+  validate({
+    params: idParam,
+    body: z.object({ status: z.enum(['visible', 'hidden']), reason: z.string().trim().max(200).nullish() }),
+  }),
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req);
+    await reviews.moderatePhoto(user.id, req.params.id!, req.body);
+    await audit({
+      actorId: user.id,
+      actorRole: user.role,
+      action: req.body.status === 'hidden' ? 'dining.photo.hidden' : 'dining.photo.restored',
+      entityType: 'dining.review_photo',
+      entityId: req.params.id!,
+      metadata: req.body.reason ? { reason: req.body.reason } : undefined,
+    });
     return ok(res, { status: req.body.status });
   }),
 );

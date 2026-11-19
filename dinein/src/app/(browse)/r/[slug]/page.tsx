@@ -4,17 +4,20 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { BadgePercent, Clock3, IndianRupee, MapPin, Navigation, Phone, ReceiptText, Star, Wallet } from 'lucide-react';
 import { fetchPublic } from '@tixit/session';
-import type { Offer, RestaurantDetail } from '@/lib/types';
+import type { MenuSection, Offer, RestaurantDetail } from '@/lib/types';
 import { clock, cn, humanTag, rupees } from '@/lib/format';
 import { directionsUrl } from '@/lib/urls';
 import { Gallery } from '@/components/restaurant/gallery';
 import { OpenDot, RatingPill } from '@/components/restaurant/bits';
 import { DesktopBookingCard, MobileBookingDock } from '@/components/restaurant/booking-launcher';
 import { ShareButton } from '@/components/restaurant/share-button';
+import { PhotoStrip } from '@/components/restaurant/photo-lightbox';
+import { MenuView } from '@/components/menu/menu-view';
 
 type Props = { params: Promise<{ slug: string }> };
 
 const getRestaurant = (slug: string) => fetchPublic<RestaurantDetail>(`/dining/restaurants/${slug}`, undefined, 60);
+const getMenu = (slug: string) => fetchPublic<{ sections: MenuSection[] }>(`/dining/restaurants/${slug}/menu`, undefined, 60);
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const restaurant = await getRestaurant((await params).slug);
@@ -56,6 +59,7 @@ function OfferCard({ offer, highlight }: { offer: Offer; highlight?: boolean }) 
 export default async function RestaurantPage({ params }: Props) {
   const restaurant = await getRestaurant((await params).slug);
   if (!restaurant) notFound();
+  const menu = restaurant.menuItemCount > 0 ? await getMenu(restaurant.slug) : null;
 
   const prebook = restaurant.offers.filter((o) => o.appliesTo !== 'walkin');
   const walkin = restaurant.offers.filter((o) => o.appliesTo !== 'prebook');
@@ -193,6 +197,8 @@ export default async function RestaurantPage({ params }: Props) {
               </Link>
             )}
 
+            {menu && menu.sections.length > 0 && <MenuView sections={menu.sections} restaurantName={restaurant.name} />}
+
             {/* ── about ── */}
             <section className="mt-8">
               <h2 className="text-lg font-extrabold tracking-tight">About</h2>
@@ -272,16 +278,30 @@ export default async function RestaurantPage({ params }: Props) {
                   </ul>
                 </div>
               )}
+              {restaurant.dinerPhotos.length > 0 && (
+                <div className="mt-4">
+                  <p className="mb-2 text-sm font-bold">Diner photos</p>
+                  <PhotoStrip
+                    label="Photos from diners"
+                    photos={restaurant.dinerPhotos.map((photo) => ({ id: photo.id, url: photo.url, caption: `By ${photo.author}` }))}
+                  />
+                </div>
+              )}
               {restaurant.reviews.length > 0 ? (
                 <ul className="mt-3 space-y-3">
-                  {restaurant.reviews.map((review, index) => (
-                    <li key={index} className="rounded-2xl bg-white p-4 ring-1 ring-ink-200">
+                  {restaurant.reviews.map((review) => (
+                    <li key={review.id} className="rounded-2xl bg-white p-4 ring-1 ring-ink-200">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-bold">{review.author}</span>
                         <RatingPill rating={review.rating} />
                       </div>
                       <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-save-700">Verified diner</p>
                       {review.body && <p className="mt-2 text-sm leading-relaxed text-ink-700">{review.body}</p>}
+                      {review.photos.length > 0 && (
+                        <div className="mt-3">
+                          <PhotoStrip size="sm" label={`Photos from ${review.author}`} photos={review.photos} />
+                        </div>
+                      )}
                       {review.reply && (
                         <p className="mt-3 rounded-xl bg-ink-50 p-3 text-sm text-ink-600">
                           <span className="font-bold text-ink-800">Reply from {restaurant.name}: </span>
@@ -292,7 +312,7 @@ export default async function RestaurantPage({ params }: Props) {
                   ))}
                 </ul>
               ) : (
-                <p className="mt-3 rounded-2xl bg-white p-4 text-sm text-ink-500 ring-1 ring-ink-200">No written reviews yet.</p>
+                <p className="mt-3 rounded-2xl bg-white p-4 text-sm text-ink-500 ring-1 ring-ink-200">No reviews yet.</p>
               )}
             </section>
           </div>
