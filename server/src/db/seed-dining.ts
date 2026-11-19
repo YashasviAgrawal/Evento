@@ -499,7 +499,7 @@ async function seedHistory(restaurantIds: string[], customerIds: string[]): Prom
         return rows[0]!.id;
       });
 
-      await markBillPaid(id, { method: 'upi', paymentId: 'seed' });
+      await markBillPaid(id, { method: 'upi', paymentId: 'seed' }, { notify: false });
       await query(
         `UPDATE dining.bill_payments SET paid_at = $2, status = 'verified', verified_at = $2, verification_method = 'staff'
           WHERE id = $1`,

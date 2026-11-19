@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { CalendarCheck2, ChevronDown, ExternalLink, LogOut, Store, Ticket, User } from 'lucide-react';
+import { CalendarCheck2, ChevronDown, ExternalLink, LogOut, Shield, Store, Ticket, User } from 'lucide-react';
 import { useAuth } from '@tixit/session';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@tixit/session';
@@ -92,6 +92,11 @@ export function AccountMenu({ tone = 'light' }: { tone?: 'light' | 'night' }) {
               <span className="ml-auto rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-700">
                 {restaurants.length}
               </span>
+            </Link>
+          )}
+          {user.role === 'admin' && (
+            <Link href="/admin" className={item} onClick={() => setOpen(false)}>
+              <Shield className="h-4 w-4 text-ink-400" /> Dine-in admin
             </Link>
           )}
           <a href={`${EVENTS_URL}/account/bookings`} className={item}>

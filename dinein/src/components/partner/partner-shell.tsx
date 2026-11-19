@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeftRight, CalendarDays, ExternalLink, LogOut, Tag, Wallet, Zap } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Clock3, ExternalLink, LogOut, Tag, Wallet, Zap } from 'lucide-react';
 import { useAuth } from '@tixit/session';
 import type { Capability, PartnerRestaurant } from '@/lib/types';
 import { cn } from '@/lib/format';
@@ -12,6 +12,7 @@ const NAV: Array<{ href: string; label: string; icon: typeof Zap; needs: Capabil
   { href: '', label: 'Live', icon: Zap, needs: 'bills.verify' },
   { href: '/reservations', label: 'Reservations', icon: CalendarDays, needs: 'reservations.manage' },
   { href: '/offers', label: 'Offers', icon: Tag, needs: 'offers.manage' },
+  { href: '/availability', label: 'Hours', icon: Clock3, needs: 'availability.manage' },
   { href: '/payouts', label: 'Payouts', icon: Wallet, needs: 'payouts.view' },
 ];
 
@@ -105,7 +106,7 @@ export function PartnerShell({
           const target = `${base}${href}`;
           const active = href === '' ? pathname === base : pathname.startsWith(target);
           return (
-            <Link key={label} href={target} className={cn('relative flex w-20 flex-col items-center gap-1 pb-1 text-[11px] font-semibold', active ? 'text-brand-600' : 'text-ink-400')}>
+            <Link key={label} href={target} className={cn('relative flex w-16 flex-col items-center gap-1 pb-1 text-[11px] font-semibold', active ? 'text-brand-600' : 'text-ink-400')}>
               <Icon className="h-5 w-5" />
               {label}
               {href === '' && badge ? <span className="absolute right-4 top-0 h-2 w-2 rounded-full bg-brand-600" /> : null}

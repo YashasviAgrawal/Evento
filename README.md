@@ -105,10 +105,16 @@ product and engineering plan is in [`docs/dinein/PLAN.md`](docs/dinein/PLAN.md).
 | Live: payments to verify (same rotating code as the diner) with chime, arrivals, today's numbers | `/partner/[id]` |
 | Reservations by day: accept, decline, seat, complete, no-show | `/partner/[id]/reservations` |
 | Offers: create, edit, pause, remove — the restaurant sets the depth | `/partner/[id]/offers` |
+| Hours & tables: weekly seating windows and covers, close a date, booking/Pay Bill switches | `/partner/[id]/availability` |
 | Payouts from the ledger, settlements, 7-day sales | `/partner/[id]/payouts` |
 
-Admin endpoints under `/api/v1/admin/dining` onboard restaurants, set commission, add staff and
-record settlements.
+| Dine-in admin (platform admins) | Where |
+| --- | --- |
+| Restaurants by status, onboarding sheet (starts in review with default hours) | `/admin` |
+| Go live / pause / delist, commercials, staff by Tixit email, payouts posted to the ledger | `/admin/[id]` |
+
+Diners get emails for every booking change (confirmed, request sent, accepted, declined, cancelled),
+a reminder about two hours before their table, and an itemised receipt for each bill paid.
 
 How the money works: one pure pricing engine (`server/src/modules/dining/offers/engine.ts`) prices
 both the quote and the charge; every captured bill posts a balanced entry to a double-entry ledger

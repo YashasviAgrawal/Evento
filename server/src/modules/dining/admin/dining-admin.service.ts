@@ -176,3 +176,119 @@ export async function recordSettlement(restaurantId: string, input: z.infer<type
     return { reference, amountPaise };
   });
 }
+
+/* ─────────────────────── detail & commercials ─────────────────────── */
+
+export async function getRestaurantForAdmin(id: string) {
+  const row = await queryOne<{
+    id: string;
+    slug: string;
+    name: string;
+    locality: string;
+    address: string;
+    status: string;
+    commission_bps: number;
+    service_charge_percent: string | number;
+    gstin: string | null;
+    fssai: string | null;
+    cover_url: string | null;
+    city: string;
+    created_at: Date;
+  }>(
+    `SELECT r.id, r.slug, r.name, r.locality, r.address, r.status, r.commission_bps, r.service_charge_percent,
+            r.gstin, r.fssai, r.cover_url, c.name AS city, r.created_at
+       FROM dining.restaurants r JOIN cities c ON c.id = r.city_id WHERE r.id = $1`,
+    [id],
+  );
+  if (!row) throw new NotFoundError('Restaurant');
+
+  const [{ rows: members }, balance, stats] = await Promise.all([
+    query<{ user_id: string; full_name: string; email: string; role: string }>(
+      `SELECT m.user_id, u.full_name, u.email, m.role
+         FROM dining.restaurant_members m JOIN users u ON u.id = m.user_id
+        WHERE m.restaurant_id = $1
+        ORDER BY array_position(ARRAY['owner','manager','host','cashier']::text[], m.role::text), u.full_name`,
+      [id],
+    ),
+    liabilityBalance(restaurantPayable(id).code),
+    queryOne<{ bills: number; gross: number; commission: number }>(
+      `SELECT count(*)::int AS bills,
+              COALESCE(sum((pricing->>'billTotalPaise')::bigint), 0)::bigint AS gross,
+              COALESCE(sum(commission_paise), 0)::bigint AS commission
+         FROM dining.bill_payments WHERE restaurant_id = $1 AND status IN ('paid', 'verified', 'disputed')`,
+      [id],
+    ),
+  ]);
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    locality: row.locality,
+    address: row.address,
+    city: row.city,
+    status: row.status,
+    coverUrl: row.cover_url,
+    commissionPercent: row.commission_bps / 100,
+    serviceChargePercent: Number(row.service_charge_percent),
+    gstin: row.gstin,
+    fssai: row.fssai,
+    createdAt: row.created_at,
+    payableBalancePaise: balance,
+    lifetime: {
+      bills: Number(stats?.bills ?? 0),
+      grossPaise: Number(stats?.gross ?? 0),
+      commissionPaise: Number(stats?.commission ?? 0),
+    },
+    members: members.map((m) => ({ userId: m.user_id, fullName: m.full_name, email: m.email, role: m.role })),
+  };
+}
+
+export const commercialsInput = z.object({
+  commissionPercent: z.coerce.number().min(0).max(30).optional(),
+  serviceChargePercent: z.coerce.number().min(0).max(20).optional(),
+  gstin: z.string().trim().max(20).nullish(),
+  fssai: z.string().trim().max(20).nullish(),
+});
+
+/**
+ * Commission applies to bills created after the change: every bill freezes
+ * its own commission when it is priced, so history never moves.
+ */
+export async function updateCommercials(id: string, input: z.infer<typeof commercialsInput>) {
+  const { rowCount } = await query(
+    `UPDATE dining.restaurants SET
+       commission_bps = COALESCE($2, commission_bps),
+       service_charge_percent = COALESCE($3, service_charge_percent),
+       gstin = CASE WHEN $4::boolean THEN $5 ELSE gstin END,
+       fssai = CASE WHEN $6::boolean THEN $7 ELSE fssai END
+     WHERE id = $1`,
+    [
+      id,
+      input.commissionPercent === undefined ? null : Math.round(input.commissionPercent * 100),
+      input.serviceChargePercent ?? null,
+      input.gstin !== undefined,
+      input.gstin ?? null,
+      input.fssai !== undefined,
+      input.fssai ?? null,
+    ],
+  );
+  if (!rowCount) throw new NotFoundError('Restaurant');
+  return getRestaurantForAdmin(id);
+}
+
+export async function removeMember(restaurantId: string, userId: string) {
+  const owners = await queryOne<{ count: number }>(
+    `SELECT count(*)::int AS count FROM dining.restaurant_members WHERE restaurant_id = $1 AND role = 'owner'`,
+    [restaurantId],
+  );
+  const target = await queryOne<{ role: string }>(
+    'SELECT role FROM dining.restaurant_members WHERE restaurant_id = $1 AND user_id = $2',
+    [restaurantId, userId],
+  );
+  if (!target) throw new NotFoundError('Staff member');
+  if (target.role === 'owner' && Number(owners?.count) <= 1) {
+    throw new ConflictError('A restaurant must keep at least one owner', 'LAST_OWNER');
+  }
+  await query('DELETE FROM dining.restaurant_members WHERE restaurant_id = $1 AND user_id = $2', [restaurantId, userId]);
+}

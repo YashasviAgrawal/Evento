@@ -7,6 +7,7 @@ import { purgeExpiredRegistrations } from '../modules/auth/auth.service';
 import { sendMail } from '../services/mail.service';
 import { formatEventDate } from '../utils/dates';
 import { autoVerifyStaleBills, cancelAbandonedBills } from '../modules/dining/bills/bill.service';
+import { sendReservationReminders } from '../modules/dining/notifications';
 
 /**
  * In-process background jobs.
@@ -116,6 +117,10 @@ export function startScheduler(): void {
     if (count) logger.info({ count }, 'Auto-verified paid dine-in bills');
   });
   every('dining-cancel-abandoned-bills', 15 * 60_000, cancelAbandonedBills);
+  every('dining-reservation-reminders', 5 * 60_000, async () => {
+    const count = await sendReservationReminders();
+    if (count) logger.info({ count }, 'Sent dine-in table reminders');
+  });
 
   // Kick off one immediate pass so a restart does not wait a full interval.
   void releaseExpiredHolds().catch(() => undefined);

@@ -10,6 +10,7 @@ import * as partner from './partner.service';
 import * as reservations from '../reservations/reservation.service';
 import * as bills from '../bills/bill.service';
 import * as offers from '../offers/offer.service';
+import * as availability from './availability-admin.service';
 
 /**
  * Partner console API. Every route is scoped by `:restaurantId` and the
@@ -135,6 +136,39 @@ router.delete(
     await offers.archiveRestaurantOffer(req.restaurant!.id, req.params.offerId!);
     return ok(res, { archived: true });
   }),
+);
+
+router.get(
+  '/r/:restaurantId/availability',
+  requireRestaurantAccess('availability.manage'),
+  validate({ params: restaurantParam }),
+  asyncHandler(async (req, res) => ok(res, await availability.getAvailability(req.restaurant!.id))),
+);
+
+router.put(
+  '/r/:restaurantId/availability/rules',
+  requireRestaurantAccess('availability.manage'),
+  validate({ params: restaurantParam, body: availability.rulesInput }),
+  asyncHandler(async (req, res) => ok(res, await availability.replaceRules(req.restaurant!.id, req.body))),
+);
+
+router.patch(
+  '/r/:restaurantId/availability/settings',
+  requireRestaurantAccess('availability.manage'),
+  validate({ params: restaurantParam, body: availability.settingsInput }),
+  asyncHandler(async (req, res) => ok(res, await availability.updateSettings(req.restaurant!.id, req.body))),
+);
+
+router.post(
+  '/r/:restaurantId/availability/closures',
+  requireRestaurantAccess('availability.manage'),
+  validate({
+    params: restaurantParam,
+    body: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), closed: z.boolean() }),
+  }),
+  asyncHandler(async (req, res) =>
+    ok(res, await availability.setDateClosed(req.restaurant!.id, req.body.date, req.body.closed)),
+  ),
 );
 
 router.get(

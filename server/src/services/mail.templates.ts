@@ -65,7 +65,32 @@ export interface TemplateData {
     utr: string | null;
     periodLabel: string;
   };
+  /** Tixit Dine-in: every change a diner should hear about, one template. */
+  dining_reservation: {
+    name: string;
+    kind: 'confirmed' | 'requested' | 'accepted' | 'declined' | 'cancelled' | 'reminder';
+    code: string;
+    restaurant: string;
+    address: string;
+    when: string;
+    partySize: number;
+    offer: string | null;
+    url: string;
+  };
+  dining_bill_receipt: {
+    name: string;
+    code: string;
+    restaurant: string;
+    paidAt: string;
+    billTotalPaise: number;
+    savedPaise: number;
+    amountPaise: number;
+    lines: Array<{ label: string; amountPaise: number }>;
+    url: string;
+  };
 }
+
+
 
 export type TemplateName = keyof TemplateData;
 
@@ -326,6 +351,49 @@ export function renderTemplate<T extends TemplateName>(name: T, data: TemplateDa
         subject: `Payout ${d.reference} · ${formatINR(d.amountPaise)}`,
         html: layout('Payout sent 💸', body),
         text: `Payout ${d.reference} of ${formatINR(d.amountPaise)} has been sent for ${d.organizerName}.`,
+      };
+    }
+
+    case 'dining_reservation': {
+      const d = data as TemplateData['dining_reservation'];
+      const copy = {
+        confirmed: { subject: `Table booked at ${d.restaurant}`, heading: 'Your table is booked 🍽️', lead: 'See you soon. Show this code if the host asks for it.' },
+        requested: { subject: `Booking request sent to ${d.restaurant}`, heading: 'Request sent', lead: 'The restaurant usually confirms within 15 minutes — we’ll email you as soon as they do.' },
+        accepted: { subject: `${d.restaurant} confirmed your table`, heading: 'Confirmed by the restaurant ✅', lead: 'Your table is confirmed. See you soon.' },
+        declined: { subject: `${d.restaurant} couldn’t take your booking`, heading: 'Booking declined', lead: 'Sorry — the restaurant can’t seat you at that time. Plenty of other tables are open tonight.' },
+        cancelled: { subject: `Booking cancelled · ${d.restaurant}`, heading: 'Booking cancelled', lead: 'Your table has been released. Nothing was charged.' },
+        reminder: { subject: `Tonight: your table at ${d.restaurant}`, heading: 'See you in a couple of hours', lead: 'Your table is coming up. Pay the bill on Tixit at the end to get your offer.' },
+      }[d.kind];
+      const rows: Array<[string, string]> = [
+        ['Booking code', d.code],
+        ['Restaurant', d.restaurant],
+        ['When', d.when],
+        ['Guests', String(d.partySize)],
+      ];
+      if (d.offer && d.kind !== 'declined' && d.kind !== 'cancelled') rows.push(['Offer locked in', `${d.offer} — applies when you pay the bill on Tixit`]);
+      if (d.kind !== 'declined' && d.kind !== 'cancelled') rows.push(['Address', d.address]);
+      const body = `<p>Hi ${d.name}, ${copy.lead}</p>${detailRows(rows)}`;
+      return {
+        subject: copy.subject,
+        html: layout(copy.heading, body, { label: d.kind === 'declined' ? 'Find another table' : 'View booking', url: d.url }),
+        text: `${copy.subject}. ${d.code} · ${d.when} · ${d.partySize} guests. ${d.url}`,
+      };
+    }
+
+    case 'dining_bill_receipt': {
+      const d = data as TemplateData['dining_bill_receipt'];
+      const rows: Array<[string, string]> = [
+        ['Receipt', d.code],
+        ['Restaurant', d.restaurant],
+        ['Paid', d.paidAt],
+        ...d.lines.map((line): [string, string] => [line.label, `${line.amountPaise < 0 ? '−' : ''}${formatINR(Math.abs(line.amountPaise))}`]),
+        ['You paid', formatINR(d.amountPaise)],
+      ];
+      const saved = d.savedPaise > 0 ? `<p style="color:#047857;font-weight:600;">You saved ${formatINR(d.savedPaise)} on this bill.</p>` : '';
+      return {
+        subject: `Receipt ${d.code} · ${formatINR(d.amountPaise)} at ${d.restaurant}`,
+        html: layout('Payment received', `<p>Hi ${d.name}, thanks for paying with Tixit.</p>${saved}${detailRows(rows)}`, { label: 'View receipt', url: d.url }),
+        text: `Paid ${formatINR(d.amountPaise)} at ${d.restaurant} (${d.code}). Saved ${formatINR(d.savedPaise)}. ${d.url}`,
       };
     }
 

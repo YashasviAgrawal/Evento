@@ -13,6 +13,7 @@ export const CAPABILITIES = {
   'bills.verify': ['owner', 'manager', 'host', 'cashier'],
   'reservations.manage': ['owner', 'manager', 'host'],
   'offers.manage': ['owner', 'manager'],
+  'availability.manage': ['owner', 'manager'],
   'payouts.view': ['owner'],
   'insights.view': ['owner', 'manager'],
 } as const satisfies Record<string, readonly MemberRole[]>;

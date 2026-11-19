@@ -23,6 +23,7 @@ import { DINING_TZ, toLocalMoment } from '../time';
 import { priceBill, type BillPricing, type OfferMode } from '../offers/engine';
 import { activeRestaurantOffers, findCoupon, reviveEngineOffer, toEngineOffer, usageFor } from '../offers/offer.service';
 import { codeAt, newVerifySecret, STEP_SECONDS } from './verification';
+import { notifyBillPaid } from '../notifications';
 
 /* ───────────────────────── input ───────────────────────── */
 
@@ -329,8 +330,12 @@ export async function verifyBillPayment(
  * commit together or not at all. Idempotent — the guarded UPDATE means the
  * client callback and the webhook cannot both post.
  */
-export async function markBillPaid(billId: string, context: { method: string; paymentId: string }): Promise<boolean> {
-  return withTransaction(async (client) => {
+export async function markBillPaid(
+  billId: string,
+  context: { method: string; paymentId: string },
+  options: { notify?: boolean } = {},
+): Promise<boolean> {
+  const paid = await withTransaction(async (client) => {
     const { rows } = await client.query<{
       id: string;
       code: string;
@@ -392,6 +397,9 @@ export async function markBillPaid(billId: string, context: { method: string; pa
     logger.info({ bill: bill.code, payable: p.amountPayablePaise }, 'Dine-in bill paid');
     return true;
   });
+  // Only the call that actually moved the bill to paid sends the receipt.
+  if (paid && options.notify !== false) notifyBillPaid(billId);
+  return paid;
 }
 
 registerPaymentSubject('bill_payment', {

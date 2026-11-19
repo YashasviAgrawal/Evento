@@ -4,6 +4,7 @@ import { readableCode } from '../../../utils/ids';
 import { DINING_TZ, toLocalMoment } from '../time';
 import { activeRestaurantOffers, toEngineOffer } from '../offers/offer.service';
 import { bestPrebookOffer, offerHeadline } from './availability.service';
+import { notifyReservation } from '../notifications';
 
 /**
  * Reservations.
@@ -201,7 +202,9 @@ export async function createReservation(
     return created[0]!.id;
   });
 
-  return getReservationById(reservationId);
+  const reservation = await getReservationById(reservationId);
+  notifyReservation(reservationId, reservation.status === 'confirmed' ? 'confirmed' : 'requested');
+  return reservation;
 }
 
 async function getReservationById(id: string): Promise<ReservationView> {
@@ -275,6 +278,7 @@ export async function cancelByDiner(code: string, userId: string, reason?: strin
   const current = await getReservationForUser(code, userId);
   if (!current.canCancel) throw new ConflictError('This reservation can no longer be cancelled', 'CANNOT_CANCEL');
   const id = await transition({ code, userId }, ['placed', 'confirmed'], 'cancelled_by_diner', { reason });
+  notifyReservation(id, 'cancelled');
   return getReservationById(id);
 }
 
@@ -286,6 +290,8 @@ export async function partnerTransition(
 ): Promise<ReservationView> {
   const rule = PARTNER_TRANSITIONS[action];
   const id = await transition({ code, restaurantId }, rule.from, rule.to, { reason });
+  if (action === 'accept') notifyReservation(id, 'accepted');
+  if (action === 'decline') notifyReservation(id, 'declined');
   return getReservationById(id);
 }
 

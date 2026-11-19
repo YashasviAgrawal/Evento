@@ -197,7 +197,13 @@ export interface BillCheckout {
 
 /* ── partner ── */
 
-export type Capability = 'bills.verify' | 'reservations.manage' | 'offers.manage' | 'payouts.view' | 'insights.view';
+export type Capability =
+  | 'bills.verify'
+  | 'reservations.manage'
+  | 'offers.manage'
+  | 'availability.manage'
+  | 'payouts.view'
+  | 'insights.view';
 
 export interface PartnerRestaurant {
   id: string;
@@ -249,4 +255,51 @@ export interface Payouts {
   balancePaise: number;
   movements: Array<{ kind: string; memo: string | null; occurredAt: string; amountPaise: number }>;
   settlements: Array<{ reference: string; amountPaise: number; utr: string | null; status: string; createdAt: string }>;
+}
+
+export interface AvailabilityRule {
+  weekday: number;
+  startTime: string;
+  endTime: string;
+  slotMinutes: 15 | 30 | 45 | 60;
+  coversPerSlot: number;
+  maxParty: number;
+}
+
+export interface Availability {
+  settings: { autoAccept: boolean; bookingEnabled: boolean; payBillEnabled: boolean };
+  rules: AvailabilityRule[];
+  closedDates: string[];
+}
+
+/* ── admin ── */
+
+export interface AdminRestaurantRow {
+  id: string;
+  slug: string;
+  name: string;
+  locality: string;
+  city: string;
+  status: 'draft' | 'pending_review' | 'live' | 'paused' | 'delisted';
+  commissionPercent: number;
+  members: number;
+}
+
+export interface AdminRestaurant {
+  id: string;
+  slug: string;
+  name: string;
+  locality: string;
+  address: string;
+  city: string;
+  status: AdminRestaurantRow['status'];
+  coverUrl: string | null;
+  commissionPercent: number;
+  serviceChargePercent: number;
+  gstin: string | null;
+  fssai: string | null;
+  createdAt: string;
+  payableBalancePaise: number;
+  lifetime: { bills: number; grossPaise: number; commissionPaise: number };
+  members: Array<{ userId: string; fullName: string; email: string; role: 'owner' | 'manager' | 'host' | 'cashier' }>;
 }

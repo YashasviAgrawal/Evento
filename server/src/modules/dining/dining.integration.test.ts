@@ -209,3 +209,107 @@ describe('reservation → Pay Bill → verification → ledger', () => {
     expect(dup.status).toBe(409);
   });
 });
+
+describe('partner availability, admin onboarding and notifications', () => {
+  it('lets a manager reshape availability without disturbing booked tables', async () => {
+    const owner = await signIn('partner@tixit.test');
+    const auth = { Authorization: `Bearer ${owner.access}` };
+    const before = await request(app).get(`/api/v1/partner/r/${restaurantId}/availability`).set(auth);
+    expect(before.status).toBe(200);
+    expect(before.body.data.rules.length).toBeGreaterThan(0);
+
+    // A diner holds a table the day after tomorrow.
+    const diner = await signIn('kabir@example.com');
+    const day = new Date(Date.now() + 2 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const slots = await request(app).get(`/api/v1/dining/restaurants/${restaurantSlug}/slots?date=${day}&party=4`);
+    const slot = slots.body.data.slots.find((s: { available: boolean }) => s.available);
+    const booked = await request(app)
+      .post('/api/v1/dining/reservations')
+      .set({ Authorization: `Bearer ${diner.access}` })
+      .send({ slotId: slot.id, partySize: 4 });
+    expect(booked.status).toBe(201);
+
+    // Overlapping windows are rejected; a valid replacement is accepted.
+    const overlap = await request(app)
+      .put(`/api/v1/partner/r/${restaurantId}/availability/rules`)
+      .set(auth)
+      .send({ rules: [0, 1].map(() => ({ weekday: 1, startTime: '19:00', endTime: '22:00', coversPerSlot: 10 })) });
+    expect(overlap.body.error.code).toBe('RULES_OVERLAP');
+
+    const rules = [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, startTime: '18:00', endTime: '22:00', slotMinutes: 60, coversPerSlot: 2, maxParty: 6 }));
+    const saved = await request(app).put(`/api/v1/partner/r/${restaurantId}/availability/rules`).set(auth).send({ rules });
+    expect(saved.status).toBe(200);
+    expect(saved.body.data.rules).toHaveLength(7);
+
+    // The booked slot survives with room for the covers already in it.
+    const kept = await queryOne<{ capacity: number; booked: number }>('SELECT capacity, booked FROM dining.slots WHERE id = $1', [slot.id]);
+    expect(kept!.booked).toBe(4);
+    expect(kept!.capacity).toBeGreaterThanOrEqual(4);
+
+    // Slots the new hourly rules no longer produce take no new bookings.
+    const orphans = await queryOne<{ count: number }>(
+      `SELECT count(*)::int AS count FROM dining.slots
+        WHERE restaurant_id = $1 AND starts_at > now() AND capacity - booked - held > 0
+          AND extract(minute FROM starts_at AT TIME ZONE 'Asia/Kolkata') <> 0`,
+      [restaurantId],
+    );
+    expect(orphans!.count).toBe(0);
+
+    // Closing the date blocks every slot and reports the bookings to call.
+    const closed = await request(app).post(`/api/v1/partner/r/${restaurantId}/availability/closures`).set(auth).send({ date: day, closed: true });
+    expect(closed.body.data.existingBookings).toBe(1);
+    const after = await request(app).get(`/api/v1/dining/restaurants/${restaurantSlug}/slots?date=${day}&party=2`);
+    expect(after.body.data.slots.every((s: { available: boolean }) => !s.available)).toBe(true);
+    await request(app).post(`/api/v1/partner/r/${restaurantId}/availability/closures`).set(auth).send({ date: day, closed: false });
+
+    // A cashier may not touch availability.
+    const cashier = await signIn('cashier@tixit.test');
+    const denied = await request(app).get(`/api/v1/partner/r/${restaurantId}/availability`).set({ Authorization: `Bearer ${cashier.access}` });
+    expect(denied.status).toBe(403);
+
+    // The diner was emailed about the booking (console transport records it).
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const mail = await queryOne<{ count: number }>(
+      `SELECT count(*)::int AS count FROM notifications n JOIN users u ON u.id = n.user_id
+        WHERE u.email = 'kabir@example.com' AND n.template = 'dining_reservation'`,
+    );
+    expect(mail!.count).toBeGreaterThan(0);
+  });
+
+  it('gives admins commercials, settlements and a last-owner guard', async () => {
+    const admin = await signIn('admin@tixit.test');
+    const auth = { Authorization: `Bearer ${admin.access}` };
+
+    const detail = await request(app).get(`/api/v1/admin/dining/restaurants/${restaurantId}`).set(auth);
+    expect(detail.status).toBe(200);
+    const owed = detail.body.data.payableBalancePaise as number;
+    expect(owed).toBeGreaterThan(0);
+
+    const commercials = await request(app)
+      .patch(`/api/v1/admin/dining/restaurants/${restaurantId}/commercials`)
+      .set(auth)
+      .send({ commissionPercent: 7.5 });
+    expect(commercials.body.data.commissionPercent).toBe(7.5);
+
+    const tooMuch = await request(app)
+      .post(`/api/v1/admin/dining/restaurants/${restaurantId}/settlements`)
+      .set(auth)
+      .send({ amount: owed / 100 + 1 });
+    expect(tooMuch.body.error.code).toBe('EXCEEDS_BALANCE');
+    const settled = await request(app)
+      .post(`/api/v1/admin/dining/restaurants/${restaurantId}/settlements`)
+      .set(auth)
+      .send({ amount: 100, utr: 'UTR123' });
+    expect(settled.status).toBe(201);
+    const afterSettle = await request(app).get(`/api/v1/admin/dining/restaurants/${restaurantId}`).set(auth);
+    expect(afterSettle.body.data.payableBalancePaise).toBe(owed - 10_000);
+
+    const owner = detail.body.data.members.find((m: { role: string }) => m.role === 'owner');
+    const lastOwner = await request(app).delete(`/api/v1/admin/dining/restaurants/${restaurantId}/members/${owner.userId}`).set(auth);
+    expect(lastOwner.body.error.code).toBe('LAST_OWNER');
+
+    const diner = await signIn('diya@example.com');
+    const forbidden = await request(app).get(`/api/v1/admin/dining/restaurants/${restaurantId}`).set({ Authorization: `Bearer ${diner.access}` });
+    expect(forbidden.status).toBe(403);
+  });
+});

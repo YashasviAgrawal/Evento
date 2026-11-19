@@ -664,8 +664,13 @@ ledger balance, SSO race and replay, full dine-in loop over HTTP).
 | SSE for the partner feed | 4-second polling of one endpoint | Works behind any proxy with no long-lived connections; the query is two indexed scans. SSE can replace it without touching the UI. |
 | `offers.version` column | Offer snapshot frozen on each bill (`pricing`) and reservation (`offer_snapshot`) | Same guarantee — edits never rewrite what a diner was promised or charged — with no version table. |
 
+**Added since:** partner Hours & tables editor (rule changes never disturb booked tables; slots the new
+rules no longer produce stop taking bookings), close-a-date, booking switches, the dining admin
+console (onboarding, go-live, commercials, staff, ledger payouts), and dine-in emails — booking
+updates, a two-hour reminder claimed with a guarded UPDATE so it never double-sends, and receipts.
+
 **Not built yet (next):** pg-boss (dine-in adds two light in-process jobs, auto-verify and abandoned
 bills; the existing single-instance note in the README still applies), phone OTP via SMS, Razorpay
 Route transfers (settlements are recorded with a UTR, as event payouts are), cover-charge bookings,
-bank offers, wallet/cashback, an admin UI for dining (the API exists), and the outbox for
+bank offers, wallet/cashback, and the outbox for
 cross-module events (bill capture posts to the ledger in the same transaction instead).

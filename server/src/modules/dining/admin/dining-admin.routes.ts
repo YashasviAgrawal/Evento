@@ -25,6 +25,39 @@ router.post(
   }),
 );
 
+router.get(
+  '/restaurants/:id',
+  validate({ params: idParam }),
+  asyncHandler(async (req, res) => ok(res, await admin.getRestaurantForAdmin(req.params.id!))),
+);
+
+router.patch(
+  '/restaurants/:id/commercials',
+  validate({ params: idParam, body: admin.commercialsInput }),
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req);
+    const updated = await admin.updateCommercials(req.params.id!, req.body);
+    await audit({
+      actorId: user.id,
+      actorRole: user.role,
+      action: 'dining.restaurant.commercials',
+      entityType: 'dining.restaurant',
+      entityId: req.params.id!,
+      metadata: req.body,
+    });
+    return ok(res, updated);
+  }),
+);
+
+router.delete(
+  '/restaurants/:id/members/:userId',
+  validate({ params: idParam.extend({ userId: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    await admin.removeMember(req.params.id!, req.params.userId!);
+    return ok(res, { removed: true });
+  }),
+);
+
 router.patch(
   '/restaurants/:id/status',
   validate({ params: idParam, body: z.object({ status: z.enum(['live', 'paused', 'delisted', 'pending_review']) }) }),
