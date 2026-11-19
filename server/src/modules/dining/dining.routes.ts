@@ -10,6 +10,7 @@ import * as catalog from './catalog/catalog.service';
 import { slotsForDate } from './reservations/availability.service';
 import * as reservations from './reservations/reservation.service';
 import * as bills from './bills/bill.service';
+import * as split from './bills/split.service';
 import * as reviews from './reviews.service';
 import { getPublicMenu } from './menu/menu.service';
 import * as cover from './reservations/cover.service';
@@ -101,7 +102,65 @@ router.post(
   asyncHandler(async (req, res) => ok(res, await bills.quoteBill(req.body, req.user?.id ?? null))),
 );
 
+const shareParam = z.object({ token: z.string().min(16).max(64) });
+const verifyBody = z.object({
+  razorpayOrderId: z.string().min(4).max(120),
+  razorpayPaymentId: z.string().min(4).max(120),
+  razorpaySignature: z.string().min(16).max(256),
+});
+
+/** A share link opens for anyone who has it; paying needs an account. */
+router.get(
+  '/splits/:token',
+  optionalAuth,
+  validate({ params: shareParam }),
+  asyncHandler(async (req, res) => ok(res, await split.getShareByToken(req.params.token!, req.user?.id ?? null))),
+);
+
 router.use(authenticate);
+
+router.post(
+  '/splits/:token/checkout',
+  bookingLimiter,
+  validate({ params: shareParam }),
+  asyncHandler(async (req, res) => ok(res, await split.startShareCheckout(req.params.token!, currentUser(req).id), 201)),
+);
+
+router.post(
+  '/splits/:token/verify-payment',
+  validate({ params: shareParam, body: verifyBody }),
+  asyncHandler(async (req, res) => {
+    await split.verifyShareCheckout(req.params.token!, currentUser(req).id, {
+      orderId: req.body.razorpayOrderId,
+      paymentId: req.body.razorpayPaymentId,
+      signature: req.body.razorpaySignature,
+    });
+    return ok(res, await split.getShareByToken(req.params.token!, currentUser(req).id));
+  }),
+);
+
+const billCodeParam = z.object({ code: z.string().min(4).max(20) });
+
+router.get(
+  '/bills/:code/split',
+  validate({ params: billCodeParam }),
+  asyncHandler(async (req, res) => ok(res, await split.getSplitForHost(req.params.code!, currentUser(req).id))),
+);
+
+router.post(
+  '/bills/:code/split/cover',
+  validate({ params: billCodeParam }),
+  asyncHandler(async (req, res) => ok(res, await split.coverRemaining(req.params.code!, currentUser(req).id), 201)),
+);
+
+router.post(
+  '/bills/:code/split/cancel',
+  validate({ params: billCodeParam }),
+  asyncHandler(async (req, res) => {
+    await split.cancelSplit(req.params.code!, currentUser(req).id);
+    return ok(res, { cancelled: true });
+  }),
+);
 
 router.post(
   '/bills',

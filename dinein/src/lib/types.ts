@@ -271,6 +271,44 @@ export interface Bill {
   paidAt: string | null;
   createdAt: string;
   canReview: boolean;
+  splitCount: number;
+}
+
+export interface SplitProgress {
+  shareCount: number;
+  paidCount: number;
+  paidPaise: number;
+  remainingPaise: number;
+}
+
+export interface SplitForHost extends SplitProgress {
+  status: BillStatus;
+  expiresAt: string | null;
+  totalPaise: number;
+  shares: Array<{
+    shareNo: number;
+    amountPaise: number;
+    status: 'open' | 'paid' | 'refunded';
+    token: string;
+    paidAt: string | null;
+    paidBy: string | null;
+  }>;
+}
+
+export interface SharePage extends SplitProgress {
+  shareNo: number;
+  amountPaise: number;
+  status: 'open' | 'paid' | 'void' | 'refunded';
+  paidByYou: boolean;
+  isHost: boolean;
+  host: string;
+  billCode: string | null;
+  billStatus: BillStatus;
+  expiresAt: string;
+  billTotalPaise: number;
+  totalPayablePaise: number;
+  savedPaise: number;
+  restaurant: { name: string; slug: string; logoUrl: string | null; locality: string };
 }
 
 export interface BillCheckout {

@@ -31,6 +31,8 @@ export const PLATFORM = {
   cashbackExpense: { code: 'platform:cashback_expense', name: 'Cashback (net of expiry)', kind: 'expense', ownerType: 'platform' },
   /** Cover charges paid at booking, held until credited, refunded or forfeited. */
   coverDeposits: { code: 'platform:cover_deposits', name: 'Table deposits held', kind: 'liability', ownerType: 'platform' },
+  /** Shares of a split bill collected before the last one lands. */
+  splitCollections: { code: 'platform:split_collections', name: 'Split-bill shares held', kind: 'liability', ownerType: 'platform' },
 } as const satisfies Record<string, AccountSpec>;
 
 /** What a bank owes us for instant discounts it funds on its cards. */

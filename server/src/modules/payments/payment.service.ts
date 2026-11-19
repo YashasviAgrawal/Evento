@@ -330,9 +330,13 @@ async function handlePaymentCaptured(entity: Record<string, unknown>): Promise<v
     booking_id: string | null;
     bill_payment_id: string | null;
     reservation_id: string | null;
+    bill_share_id: string | null;
     status: string;
     amount_paise: number;
-  }>('SELECT id, booking_id, bill_payment_id, reservation_id, status, amount_paise FROM payments WHERE provider_order_id = $1', [orderId]);
+  }>(
+    'SELECT id, booking_id, bill_payment_id, reservation_id, bill_share_id, status, amount_paise FROM payments WHERE provider_order_id = $1',
+    [orderId],
+  );
   if (!payment) {
     logger.warn({ orderId }, 'Webhook referenced an unknown order');
     return;
@@ -347,12 +351,17 @@ async function handlePaymentCaptured(entity: Record<string, unknown>): Promise<v
     [payment.id, paymentId || null, method, JSON.stringify(entity)],
   );
 
+  const context = { method, paymentId, paymentRowId: payment.id };
   if (payment.bill_payment_id) {
-    await paymentSubjectHandler('bill_payment').captured(payment.bill_payment_id, { method, paymentId });
+    await paymentSubjectHandler('bill_payment').captured(payment.bill_payment_id, context);
     return;
   }
   if (payment.reservation_id) {
-    await paymentSubjectHandler('reservation').captured(payment.reservation_id, { method, paymentId });
+    await paymentSubjectHandler('reservation').captured(payment.reservation_id, context);
+    return;
+  }
+  if (payment.bill_share_id) {
+    await paymentSubjectHandler('bill_share').captured(payment.bill_share_id, context);
     return;
   }
   if (!payment.booking_id) return;

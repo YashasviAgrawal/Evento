@@ -8,7 +8,7 @@ import { TabBar } from './tab-bar';
  * Immersive screens — paying, the live pass at the table, signing in, the
  * partner console — get the whole viewport. Everything else gets the tab bar.
  */
-const IMMERSIVE = [/^\/pay\/.+/, /^\/bills\/.+/, /^\/auth\//, /^\/partner/, /^\/admin/];
+const IMMERSIVE = [/^\/pay\/.+/, /^\/bills\/.+/, /^\/split\/.+/, /^\/auth\//, /^\/partner/, /^\/admin/];
 /** Restaurant pages carry their own action dock (Book · Pay bill) instead of the tab bar. */
 const OWN_DOCK = [/^\/r\/.+/];
 

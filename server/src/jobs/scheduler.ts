@@ -7,6 +7,7 @@ import { purgeExpiredRegistrations } from '../modules/auth/auth.service';
 import { sendMail } from '../services/mail.service';
 import { formatEventDate } from '../utils/dates';
 import { autoVerifyStaleBills, cancelAbandonedBills } from '../modules/dining/bills/bill.service';
+import { expireSplits } from '../modules/dining/bills/split.service';
 import { sendReservationReminders } from '../modules/dining/notifications';
 import { dispatchOutbox } from '../modules/platform/outbox';
 import { expireUnpaidHolds } from '../modules/dining/reservations/reservation.service';
@@ -144,6 +145,7 @@ export function startScheduler(): void {
     if (count) logger.info({ count }, 'Auto-verified paid dine-in bills');
   });
   every('dining-cancel-abandoned-bills', 15 * 60_000, cancelAbandonedBills);
+  every('dining-expire-splits', 60_000, expireSplits);
   every('outbox-dispatch', 5_000, dispatchOutbox);
   every('dining-expire-deposit-holds', 60_000, expireUnpaidHolds);
   every('wallet-release-cashback', 10 * 60_000, releaseCashback);

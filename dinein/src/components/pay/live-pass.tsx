@@ -11,6 +11,7 @@ import { cn, dateTime, rupees } from '@/lib/format';
 import { Photo } from '@/components/ui/photo';
 import { Spinner } from '@/components/ui/feedback';
 import { Receipt } from './receipt';
+import { SplitHost } from './split';
 import { PhotoPicker, uploadReviewPhotos, type PickedPhoto } from '@/components/review/photo-picker';
 
 const RING = 2 * Math.PI * 96;
@@ -89,6 +90,20 @@ export function LivePass({ code }: { code: string }) {
             Go to your plans
           </Link>
         </div>
+      </div>
+    );
+  }
+
+  if (data.splitCount > 1 && (data.status === 'pending_payment' || data.status === 'cancelled')) {
+    return (
+      <div className="night flex min-h-dvh flex-col">
+        <header className="mx-auto flex w-full max-w-md items-center justify-between px-4 pt-4">
+          <Link href="/bookings" className="glass press grid h-10 w-10 place-items-center rounded-full" aria-label="Done">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <span className="num text-xs font-semibold text-ink-400">{data.code}</span>
+        </header>
+        <SplitHost bill={data} />
       </div>
     );
   }

@@ -4,12 +4,12 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CalendarCheck2, Check, CreditCard, Delete, Lock, TicketPercent, X } from 'lucide-react';
+import { ArrowLeft, CalendarCheck2, Check, CreditCard, Delete, Lock, TicketPercent, Users, X } from 'lucide-react';
 import { ApiError, api, openCheckout, PAYMENT_CANCELLED, useAuth } from '@tixit/session';
 import { useToast } from '@tixit/ui';
 import type { Bill, BillCheckout, BillQuote, Reservation } from '@/lib/types';
 import { cn, localDate, rupees, timeOnly } from '@/lib/format';
-import { Toggle } from '@/components/ui/controls';
+import { Stepper, Toggle } from '@/components/ui/controls';
 import { Spinner } from '@/components/ui/feedback';
 import { Photo } from '@/components/ui/photo';
 import { Receipt, SavingsBanner } from './receipt';
@@ -26,6 +26,10 @@ export interface PayRestaurant {
 }
 
 type Field = 'bill' | 'excluded';
+
+/** Mirrors the server: up to ten people, at least ₹50 each. */
+const MAX_SPLIT = 10;
+const MIN_SHARE_PAISE = 5_000;
 const MAX_DIGITS = 7;
 const TIPS = [0, 50, 100, 200];
 
@@ -68,6 +72,8 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
   const [couponOpen, setCouponOpen] = useState(Boolean(params.get('code')));
   const [useWallet, setUseWallet] = useState(params.get('wallet') !== '0');
   const [bankOfferId, setBankOfferId] = useState<string | null>(params.get('bank'));
+  const [splitInto, setSplitInto] = useState(Math.min(MAX_SPLIT, Math.max(1, Number(params.get('split') ?? 1) || 1)));
+  const splitting = splitInto > 1;
   const idempotencyKey = useRef<string>(typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now()));
 
   // Today's table here, if any: paying from it applies the pre-book offer that was promised.
@@ -93,9 +99,9 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
       couponCode: coupon,
       reservationCode: todaysTable?.code ?? null,
       useWallet,
-      bankOfferId,
+      bankOfferId: splitting ? null : bankOfferId,
     }),
-    [restaurant.id, billValue, excludedValue, keepService, tip, coupon, todaysTable?.code, useWallet, bankOfferId],
+    [restaurant.id, billValue, excludedValue, keepService, tip, coupon, todaysTable?.code, useWallet, bankOfferId, splitting],
   );
   const debounced = useDebounced(input, 250);
 
@@ -132,9 +138,14 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
 
   const pay = useMutation({
     mutationFn: async () => {
-      const { data: checkout } = await api.post<BillCheckout>('/dining/bills', input, {
-        headers: { 'idempotency-key': idempotencyKey.current },
-      });
+      const { data: created } = await api.post<BillCheckout | { code: string; split: true }>(
+        '/dining/bills',
+        { ...input, splitInto },
+        { headers: { 'idempotency-key': idempotencyKey.current } },
+      );
+      // A split bill has no single payment: the host lands on the split screen.
+      if ('split' in created) return { code: created.code };
+      const checkout = created;
       const outcome = await openCheckout(checkout, {
         description: `Bill at ${restaurant.name}`,
         notes: { billCode: checkout.code },
@@ -178,6 +189,7 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
         ...(coupon ? { code: coupon } : {}),
         ...(!useWallet ? { wallet: '0' } : {}),
         ...(bankOfferId ? { bank: bankOfferId } : {}),
+        ...(splitting ? { split: String(splitInto) } : {}),
         step: 'review',
       });
       router.push(`/auth/login?next=${encodeURIComponent(`${pathname}?${draft}`)}&reason=pay`);
@@ -263,7 +275,7 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
                 )}
               </div>
 
-              {quote.data && quote.data.bankOptions.length > 0 && (
+              {!splitting && quote.data && quote.data.bankOptions.length > 0 && (
                 <div className="rounded-2xl bg-white p-3.5 ring-1 ring-ink-200">
                   <p className="flex items-center gap-2 text-sm font-bold">
                     <CreditCard className="h-4 w-4 text-ink-400" /> Bank offers
@@ -310,6 +322,8 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
                 </div>
               )}
 
+              <SplitCard pricing={pricing.amountPayablePaise} value={splitInto} onChange={setSplitInto} hasBankOffers={Boolean(quote.data?.bankOptions.length)} />
+
               <SavingsBanner pricing={pricing} />
             </>
           ) : (
@@ -329,7 +343,14 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
               <Spinner className="border-white/40 border-t-white" />
             ) : (
               <>
-                <Lock className="h-4 w-4" /> {user ? 'Pay' : 'Sign in to pay'} {pricing ? rupees(pricing.amountPayablePaise, { decimals: true }) : ''}
+                {splitting ? <Users className="h-4 w-4" /> : <Lock className="h-4 w-4" />}{' '}
+                {!user
+                  ? splitting
+                    ? 'Sign in to split'
+                    : `Sign in to pay ${pricing ? rupees(pricing.amountPayablePaise, { decimals: true }) : ''}`
+                  : splitting
+                    ? `Split between ${splitInto}`
+                    : `Pay ${pricing ? rupees(pricing.amountPayablePaise, { decimals: true }) : ''}`}
               </>
             )}
           </button>
@@ -475,6 +496,56 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
           </Link>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Split the payable amount. Offers and the host's wallet are already in the
+ * price; each person pays an equal share from a link, and nothing is charged
+ * to the restaurant until everyone has paid.
+ */
+function SplitCard({
+  pricing: payablePaise,
+  value,
+  onChange,
+  hasBankOffers,
+}: {
+  pricing: number;
+  value: number;
+  onChange: (value: number) => void;
+  hasBankOffers: boolean;
+}) {
+  const max = Math.max(1, Math.min(MAX_SPLIT, Math.floor(payablePaise / MIN_SHARE_PAISE)));
+  const people = Math.min(value, max);
+  useEffect(() => {
+    if (value > max) onChange(max);
+  }, [value, max, onChange]);
+  if (max < 2) return null;
+  const each = Math.floor(payablePaise / people);
+  const yours = payablePaise - each * (people - 1);
+
+  return (
+    <div className="rounded-2xl bg-white p-3.5 ring-1 ring-ink-200">
+      <div className="flex items-start gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600">
+          <Users className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold">Split the bill</p>
+          <p className="text-xs text-ink-500">
+            {people > 1
+              ? `${rupees(each, { decimals: true })} each${yours !== each ? ` (yours ${rupees(yours, { decimals: true })})` : ''}. Friends pay from a link — no app needed, just a Tixit sign-in.`
+              : 'Everyone pays their share from a link you send. Offers stay applied.'}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3">
+        <Stepper value={people} onChange={onChange} min={1} max={max} unit={['person paying', 'people paying']} />
+      </div>
+      {people > 1 && hasBankOffers && (
+        <p className="mt-2 text-[11px] text-ink-500">Bank offers apply when one card pays the whole bill, so they’re off while splitting.</p>
+      )}
     </div>
   );
 }

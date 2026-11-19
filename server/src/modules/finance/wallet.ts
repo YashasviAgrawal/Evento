@@ -119,7 +119,13 @@ export async function releaseForBill(client: Queryable, billId: string): Promise
 /** Cashback a paid bill earns (pending until released). Idempotent per bill. */
 export async function accrueCashback(
   client: Queryable,
-  input: { userId: string; billId: string; eligiblePaise: number },
+  input: {
+    userId: string;
+    billId: string;
+    eligiblePaise: number;
+    /** A split bill earns cashback per share, for whoever paid it. */
+    shareId?: string;
+  },
 ): Promise<number> {
   const settings = await getSettings(client);
   // Whole rupees, rounded down: "₹82 cashback" reads better than "₹82.37".
@@ -131,10 +137,17 @@ export async function accrueCashback(
   if (amount <= 0) return 0;
   await client.query(
     `INSERT INTO finance.wallet_credits (user_id, source_type, source_id, amount_paise, remaining_paise, status, available_at, expires_at)
-     VALUES ($1, 'dining.bill_payment', $2, $3, $3, 'pending',
+     VALUES ($1, $6, $2, $3, $3, 'pending',
              now() + make_interval(hours => $4), now() + make_interval(hours => $4, days => $5))
      ON CONFLICT (source_type, source_id) DO NOTHING`,
-    [input.userId, input.billId, amount, Number(settings.dining_cashback_release_hours), Number(settings.dining_cashback_expiry_days)],
+    [
+      input.userId,
+      input.shareId ?? input.billId,
+      amount,
+      Number(settings.dining_cashback_release_hours),
+      Number(settings.dining_cashback_expiry_days),
+      input.shareId ? 'dining.bill_share' : 'dining.bill_payment',
+    ],
   );
   return amount;
 }
@@ -148,7 +161,9 @@ export async function releaseCashback(): Promise<{ released: number; clawedBack:
     const { rows } = await client.query<{ id: string; amount_paise: number; bill_status: string }>(
       `SELECT c.id, c.amount_paise, b.status AS bill_status
          FROM finance.wallet_credits c
-         JOIN dining.bill_payments b ON c.source_type = 'dining.bill_payment' AND b.id = c.source_id
+         LEFT JOIN dining.bill_shares s ON c.source_type = 'dining.bill_share' AND s.id = c.source_id
+         JOIN dining.bill_payments b
+           ON (c.source_type = 'dining.bill_payment' AND b.id = c.source_id) OR b.id = s.bill_payment_id
         WHERE c.status = 'pending' AND c.available_at <= now() AND b.status IN ('verified', 'disputed', 'refunded', 'cancelled')
         LIMIT 500
         FOR UPDATE OF c SKIP LOCKED`,

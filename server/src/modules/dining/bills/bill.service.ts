@@ -25,6 +25,7 @@ import { activeRestaurantOffers, bankOffersFor, findCoupon, reviveEngineOffer, t
 import { availableBalance, accrueCashback, captureForBill, holdForBill, releaseForBill } from '../../finance/wallet';
 import { codeAt, newVerifySecret, STEP_SECONDS } from './verification';
 import { TOPICS } from '../notifications';
+import { createShares, MAX_SPLIT } from './split-shares';
 import { enqueue, kickOutbox } from '../../platform/outbox';
 
 /* ───────────────────────── input ───────────────────────── */
@@ -44,10 +45,17 @@ export const billInput = z
     bankOfferId: z.string().uuid().nullish(),
     /** Spend Tixit Wallet balance on this bill. */
     useWallet: z.boolean().default(false),
+    /** Split the payable amount between this many people (1 = no split). */
+    splitInto: z.coerce.number().int().min(1).max(MAX_SPLIT).default(1),
   })
   .refine((value) => value.nonDiscountable <= value.billTotal, {
     message: 'This cannot be more than the bill',
     path: ['nonDiscountable'],
+  })
+  // A bank offer is funded on one card; friends pay with their own.
+  .refine((value) => value.splitInto === 1 || !value.bankOfferId, {
+    message: 'Bank offers apply when one card pays the whole bill',
+    path: ['bankOfferId'],
   });
 export type BillInput = z.infer<typeof billInput>;
 
@@ -285,13 +293,22 @@ async function checkoutFor(billId: string): Promise<BillCheckout> {
  * `idempotencyKey` (the Idempotency-Key header) makes a double tap or a retry
  * after a dropped connection return the same bill instead of a second one.
  */
-export async function createBill(userId: string, input: BillInput, idempotencyKey: string | null): Promise<BillCheckout> {
+/** A split bill has no single order: the host lands on the split screen instead. */
+export type CreatedBill = BillCheckout | { code: string; split: true };
+
+async function resultFor(billId: string): Promise<CreatedBill> {
+  const bill = await queryOne<{ code: string; split_count: number }>('SELECT code, split_count FROM dining.bill_payments WHERE id = $1', [billId]);
+  if (bill && bill.split_count > 1) return { code: bill.code, split: true };
+  return checkoutFor(billId);
+}
+
+export async function createBill(userId: string, input: BillInput, idempotencyKey: string | null): Promise<CreatedBill> {
   if (idempotencyKey) {
     const existing = await queryOne<{ id: string }>(
       'SELECT id FROM dining.bill_payments WHERE user_id = $1 AND idempotency_key = $2',
       [userId, idempotencyKey],
     );
-    if (existing) return checkoutFor(existing.id);
+    if (existing) return resultFor(existing.id);
   }
 
   const billId = await withTransaction(async (client) => {
@@ -344,6 +361,7 @@ export async function createBill(userId: string, input: BillInput, idempotencyKe
     if (rows[0]) {
       // Reserve the wallet money now so the quoted price is the charged price.
       await holdForBill(client, userId, rows[0].id, pricing.walletUsedPaise);
+      if (input.splitInto > 1) await createShares(client, rows[0].id, pricing.amountPayablePaise, input.splitInto);
       return rows[0].id;
     }
     // A concurrent request with the same key won the insert.
@@ -354,7 +372,7 @@ export async function createBill(userId: string, input: BillInput, idempotencyKe
     return raced[0]!.id;
   });
 
-  return checkoutFor(billId);
+  return resultFor(billId);
 }
 
 export async function verifyBillPayment(
@@ -415,130 +433,158 @@ export function bankInstrumentMatches(
  * Idempotent — the guarded UPDATE means the client callback and the webhook
  * cannot both post.
  */
-export async function markBillPaid(
-  billId: string,
-  context: { method: string; paymentId: string; instrument?: Record<string, unknown> | null },
-  options: { notify?: boolean } = {},
-): Promise<boolean> {
-  const paid = await withTransaction(async (client) => {
-    const { rows } = await client.query<{
-      id: string;
-      code: string;
-      user_id: string;
-      restaurant_id: string;
-      restaurant_name: string;
-      reservation_id: string | null;
-      pricing: BillPricing;
-      bank_offer_id: string | null;
-    }>(
-      `UPDATE dining.bill_payments b SET status = 'paid', paid_at = now()
-         FROM dining.restaurants r
-        WHERE b.id = $1 AND b.status = 'pending_payment' AND r.id = b.restaurant_id
-        RETURNING b.id, b.code, b.user_id, b.restaurant_id, r.name AS restaurant_name, b.reservation_id, b.pricing,
-                  b.bank_offer_id`,
-      [billId],
-    );
-    const bill = rows[0];
-    if (!bill) return false;
-    const p = bill.pricing;
-    const walletUsed = p.walletUsedPaise ?? 0;
-    const coverCredit = p.coverCreditPaise ?? 0;
-    const bankFunded = p.bankFundedDiscountPaise ?? 0;
+export interface SettleContext {
+  method: string;
+  paymentId: string;
+  instrument?: Record<string, unknown> | null;
+}
 
-    for (const applied of [p.restaurantOffer, p.coupon, p.bankOffer]) {
-      if (!applied) continue;
-      await client.query(
-        `INSERT INTO dining.offer_redemptions (offer_id, user_id, bill_payment_id, discount_paise)
-         VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
-        [applied.id, bill.user_id, bill.id, applied.discountPaise],
-      );
-    }
-
-    // The restaurant is owed the bill less what it chose to give away, plus
-    // service charge and tip. The diner's payment, the platform's promo spend,
-    // the bank's share, the table deposit and the wallet together cover it.
-    const owedGross = p.billTotalPaise - p.restaurantFundedDiscountPaise + p.serviceChargePaise + p.tipPaise;
-    const feeNet = p.convenienceFeePaise - p.convenienceFeeGstPaise;
-    const payable = restaurantPayable(bill.restaurant_id, bill.restaurant_name);
-    await post(client, {
-      kind: 'bill_paid',
-      sourceType: 'dining.bill_payment',
-      sourceId: bill.id,
-      idempotencyKey: `bill_paid:${bill.id}`,
-      memo: `${bill.code} via ${context.method} (${context.paymentId})`,
-      entries: [
-        { account: PLATFORM.gatewayClearing, amountPaise: p.amountPayablePaise },
-        { account: PLATFORM.promoExpense, amountPaise: p.platformFundedDiscountPaise },
-        ...(bankFunded && p.bankOffer?.bankName ? [{ account: bankReceivable(p.bankOffer.bankName), amountPaise: bankFunded }] : []),
-        { account: PLATFORM.coverDeposits, amountPaise: coverCredit },
-        { account: PLATFORM.walletLiability, amountPaise: walletUsed },
-        { account: payable, amountPaise: -owedGross },
-        { account: PLATFORM.feeRevenue, amountPaise: -feeNet },
-        { account: PLATFORM.gstOutput, amountPaise: -p.convenienceFeeGstPaise },
-        { account: payable, amountPaise: p.commissionPaise + p.commissionGstPaise },
-        { account: PLATFORM.commissionRevenue, amountPaise: -p.commissionPaise },
-        { account: PLATFORM.gstOutput, amountPaise: -p.commissionGstPaise },
-      ],
-    });
-
-    await captureForBill(client, bill.id);
-
-    if (bill.reservation_id) {
-      const { rows: reservationRows } = await client.query<{ cover_paise: number; cover_status: string }>(
-        `UPDATE dining.reservations SET status = 'completed', completed_at = now(),
-                cover_status = CASE WHEN cover_status = 'paid' THEN 'credited'::dining.cover_status ELSE cover_status END
-          WHERE id = $1 AND status IN ('placed', 'confirmed', 'seated')
-          RETURNING cover_paise, cover_status`,
-        [bill.reservation_id],
-      );
-      // A deposit larger than the bill: the unused part goes to the restaurant.
-      const leftover = reservationRows[0] && reservationRows[0].cover_status === 'credited'
-        ? Number(reservationRows[0].cover_paise) - coverCredit
-        : 0;
-      if (leftover > 0) {
-        await post(client, {
-          kind: 'cover_unused',
-          sourceType: 'dining.reservation',
-          sourceId: bill.reservation_id,
-          idempotencyKey: `cover_unused:${bill.reservation_id}`,
-          memo: `Unused table deposit on ${bill.code}`,
-          entries: [
-            { account: PLATFORM.coverDeposits, amountPaise: leftover },
-            { account: payable, amountPaise: -leftover },
-          ],
-        });
-      }
-    }
-
-    // Bank offer paid with someone else's card: flag for operations, never re-charge.
-    if (p.bankOffer && context.instrument !== undefined) {
-      const offer = await client.query<{ bank_name: string | null; payment_methods: string[] }>(
-        'SELECT bank_name, payment_methods FROM dining.offers WHERE id = $1',
-        [bill.bank_offer_id],
-      );
-      const row = offer.rows[0];
-      if (row && !bankInstrumentMatches(context.instrument, { bankName: row.bank_name, paymentMethods: row.payment_methods })) {
-        await client.query(
-          `UPDATE dining.bill_payments SET dispute_reason = 'Bank offer paid with an ineligible instrument' WHERE id = $1`,
-          [bill.id],
-        );
-        logger.warn({ bill: bill.code }, 'Bank offer used with an ineligible instrument');
-      }
-    }
-
-    // Cashback on what the diner actually paid for the meal.
-    await accrueCashback(client, {
-      userId: bill.user_id,
-      billId: bill.id,
-      eligiblePaise: p.amountPayablePaise - p.convenienceFeePaise - p.tipPaise - p.serviceChargePaise,
-    });
-
-    await enqueue(client, TOPICS.billPaid, { billId: bill.id, notify: options.notify !== false });
-    logger.info({ bill: bill.code, payable: p.amountPayablePaise }, 'Dine-in bill paid');
-    return true;
-  });
+export async function markBillPaid(billId: string, context: SettleContext, options: { notify?: boolean } = {}): Promise<boolean> {
+  const paid = await withTransaction((client) => settleBill(client, billId, context, options));
   if (paid) kickOutbox();
   return paid;
+}
+
+/**
+ * The settlement itself, inside the caller's transaction — so the last share
+ * of a split bill and the bill's own posting commit together.
+ */
+export async function settleBill(
+  client: Queryable,
+  billId: string,
+  context: SettleContext,
+  options: { notify?: boolean } = {},
+): Promise<boolean> {
+  const { rows } = await client.query<{
+    id: string;
+    code: string;
+    user_id: string;
+    restaurant_id: string;
+    restaurant_name: string;
+    reservation_id: string | null;
+    pricing: BillPricing;
+    bank_offer_id: string | null;
+    split_count: number;
+  }>(
+    `UPDATE dining.bill_payments b SET status = 'paid', paid_at = now()
+       FROM dining.restaurants r
+      WHERE b.id = $1 AND b.status = 'pending_payment' AND r.id = b.restaurant_id
+      RETURNING b.id, b.code, b.user_id, b.restaurant_id, r.name AS restaurant_name, b.reservation_id, b.pricing,
+                b.bank_offer_id, b.split_count`,
+    [billId],
+  );
+  const bill = rows[0];
+  if (!bill) return false;
+  const p = bill.pricing;
+  const walletUsed = p.walletUsedPaise ?? 0;
+  const coverCredit = p.coverCreditPaise ?? 0;
+  const bankFunded = p.bankFundedDiscountPaise ?? 0;
+
+  for (const applied of [p.restaurantOffer, p.coupon, p.bankOffer]) {
+    if (!applied) continue;
+    await client.query(
+      `INSERT INTO dining.offer_redemptions (offer_id, user_id, bill_payment_id, discount_paise)
+       VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+      [applied.id, bill.user_id, bill.id, applied.discountPaise],
+    );
+  }
+
+  // The restaurant is owed the bill less what it chose to give away, plus
+  // service charge and tip. The diner's payment, the platform's promo spend,
+  // the bank's share, the table deposit and the wallet together cover it.
+  const owedGross = p.billTotalPaise - p.restaurantFundedDiscountPaise + p.serviceChargePaise + p.tipPaise;
+  const feeNet = p.convenienceFeePaise - p.convenienceFeeGstPaise;
+  const payable = restaurantPayable(bill.restaurant_id, bill.restaurant_name);
+  await post(client, {
+    kind: 'bill_paid',
+    sourceType: 'dining.bill_payment',
+    sourceId: bill.id,
+    idempotencyKey: `bill_paid:${bill.id}`,
+    memo: `${bill.code} via ${context.method} (${context.paymentId})`,
+    entries: [
+      // A split bill's shares were collected into the split account as they landed.
+      { account: bill.split_count > 1 ? PLATFORM.splitCollections : PLATFORM.gatewayClearing, amountPaise: p.amountPayablePaise },
+      { account: PLATFORM.promoExpense, amountPaise: p.platformFundedDiscountPaise },
+      ...(bankFunded && p.bankOffer?.bankName ? [{ account: bankReceivable(p.bankOffer.bankName), amountPaise: bankFunded }] : []),
+      { account: PLATFORM.coverDeposits, amountPaise: coverCredit },
+      { account: PLATFORM.walletLiability, amountPaise: walletUsed },
+      { account: payable, amountPaise: -owedGross },
+      { account: PLATFORM.feeRevenue, amountPaise: -feeNet },
+      { account: PLATFORM.gstOutput, amountPaise: -p.convenienceFeeGstPaise },
+      { account: payable, amountPaise: p.commissionPaise + p.commissionGstPaise },
+      { account: PLATFORM.commissionRevenue, amountPaise: -p.commissionPaise },
+      { account: PLATFORM.gstOutput, amountPaise: -p.commissionGstPaise },
+    ],
+  });
+
+  await captureForBill(client, bill.id);
+
+  if (bill.reservation_id) {
+    const { rows: reservationRows } = await client.query<{ cover_paise: number; cover_status: string }>(
+      `UPDATE dining.reservations SET status = 'completed', completed_at = now(),
+              cover_status = CASE WHEN cover_status = 'paid' THEN 'credited'::dining.cover_status ELSE cover_status END
+        WHERE id = $1 AND status IN ('placed', 'confirmed', 'seated')
+        RETURNING cover_paise, cover_status`,
+      [bill.reservation_id],
+    );
+    // A deposit larger than the bill: the unused part goes to the restaurant.
+    const leftover = reservationRows[0] && reservationRows[0].cover_status === 'credited'
+      ? Number(reservationRows[0].cover_paise) - coverCredit
+      : 0;
+    if (leftover > 0) {
+      await post(client, {
+        kind: 'cover_unused',
+        sourceType: 'dining.reservation',
+        sourceId: bill.reservation_id,
+        idempotencyKey: `cover_unused:${bill.reservation_id}`,
+        memo: `Unused table deposit on ${bill.code}`,
+        entries: [
+          { account: PLATFORM.coverDeposits, amountPaise: leftover },
+          { account: payable, amountPaise: -leftover },
+        ],
+      });
+    }
+  }
+
+  // Bank offer paid with someone else's card: flag for operations, never re-charge.
+  if (p.bankOffer && context.instrument !== undefined) {
+    const offer = await client.query<{ bank_name: string | null; payment_methods: string[] }>(
+      'SELECT bank_name, payment_methods FROM dining.offers WHERE id = $1',
+      [bill.bank_offer_id],
+    );
+    const row = offer.rows[0];
+    if (row && !bankInstrumentMatches(context.instrument, { bankName: row.bank_name, paymentMethods: row.payment_methods })) {
+      await client.query(
+        `UPDATE dining.bill_payments SET dispute_reason = 'Bank offer paid with an ineligible instrument' WHERE id = $1`,
+        [bill.id],
+      );
+      logger.warn({ bill: bill.code }, 'Bank offer used with an ineligible instrument');
+    }
+  }
+
+  // Cashback on what the diner actually paid for the meal — on a split bill,
+  // to each payer in proportion to their share.
+  const eligible = p.amountPayablePaise - p.convenienceFeePaise - p.tipPaise - p.serviceChargePaise;
+  if (bill.split_count > 1) {
+    const shares = await client.query<{ id: string; amount_paise: number; payer_user_id: string }>(
+      `SELECT id, amount_paise, payer_user_id FROM dining.bill_shares WHERE bill_payment_id = $1 AND status = 'paid'`,
+      [bill.id],
+    );
+    for (const share of shares.rows) {
+      await accrueCashback(client, {
+        userId: share.payer_user_id,
+        billId: bill.id,
+        shareId: share.id,
+        eligiblePaise: Math.floor((eligible * Number(share.amount_paise)) / p.amountPayablePaise),
+      });
+    }
+  } else {
+    await accrueCashback(client, { userId: bill.user_id, billId: bill.id, eligiblePaise: eligible });
+  }
+
+  await enqueue(client, TOPICS.billPaid, { billId: bill.id, notify: options.notify !== false });
+  logger.info({ bill: bill.code, payable: p.amountPayablePaise }, 'Dine-in bill paid');
+  return true;
 }
 
 registerPaymentSubject('bill_payment', {
@@ -572,13 +618,14 @@ interface BillRow {
   diner_name?: string;
   diner_phone?: string | null;
   has_review?: boolean;
+  split_count: number;
 }
 
 const BILL_SELECT = `
   SELECT b.id, b.code, b.status, b.user_id, b.restaurant_id, r.slug AS restaurant_slug, r.name AS restaurant_name,
          r.locality AS restaurant_locality, r.cover_url AS restaurant_cover, r.logo_url AS restaurant_logo,
          v.code AS reservation_code, b.pricing, b.amount_payable_paise, b.verify_secret, b.verified_at,
-         b.verification_method, b.dispute_reason, b.paid_at, b.created_at,
+         b.verification_method, b.dispute_reason, b.paid_at, b.created_at, b.split_count,
          u.full_name AS diner_name, u.phone AS diner_phone,
          EXISTS (SELECT 1 FROM dining.reviews rv WHERE rv.bill_payment_id = b.id) AS has_review
     FROM dining.bill_payments b
@@ -616,6 +663,8 @@ function toBill(row: BillRow) {
     paidAt: row.paid_at,
     createdAt: row.created_at,
     canReview: (row.status === 'verified' || row.status === 'paid') && !row.has_review,
+    /** People sharing the payment; details come from the split endpoint. */
+    splitCount: row.split_count,
   };
 }
 export type BillView = ReturnType<typeof toBill>;
@@ -714,7 +763,7 @@ export async function cancelAbandonedBills(): Promise<number> {
     const { rows } = await client.query<{ id: string }>(
       `UPDATE dining.bill_payments SET status = 'cancelled'
         WHERE id IN (SELECT id FROM dining.bill_payments
-                      WHERE status = 'pending_payment' AND created_at < now() - interval '1 hour'
+                      WHERE status = 'pending_payment' AND split_count = 1 AND created_at < now() - interval '1 hour'
                       LIMIT 500 FOR UPDATE SKIP LOCKED)
         RETURNING id`,
     );
