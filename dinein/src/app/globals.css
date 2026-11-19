@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────
+   Tixit Dine-in — same base as www.tixit.in, plus the evening
+   surfaces this product leans on. Tokens come from the shared
+   Tixit Tailwind preset (packages/config).
+   ───────────────────────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * {
+    @apply border-ink-200;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-ink-50 text-ink-900 antialiased;
+    font-family: var(--font-sans);
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-white;
+  }
+
+  ::selection {
+    @apply bg-brand-100 text-brand-900;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .card {
+    @apply rounded-2xl border border-ink-200 bg-white shadow-card;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-ink-300 bg-white px-3.5 py-3 text-[15px] text-ink-900
+           placeholder:text-ink-400 transition
+           focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100
+           disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-400;
+  }
+
+  .label {
+    @apply mb-1.5 block text-[13px] font-semibold text-ink-700;
+  }
+
+  .eyebrow {
+    @apply text-[11px] font-bold uppercase tracking-[0.08em];
+  }
+
+  .press {
+    @apply transition-transform duration-150 ease-smooth active:scale-[0.97];
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden bg-ink-200/70;
+  }
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/60 to-transparent;
+    content: '';
+  }
+
+  /* The Tixit evening surface: ink-950 with a rose and violet glow. */
+  .night {
+    @apply relative isolate overflow-hidden bg-ink-950 text-white;
+  }
+  .night::before,
+  .night::after {
+    @apply pointer-events-none absolute -z-10 rounded-full blur-3xl;
+    content: '';
+  }
+  .night::before {
+    @apply -left-24 -top-32 h-96 w-96 bg-brand-600/35;
+  }
+  .night::after {
+    @apply -right-32 top-10 h-80 w-80 bg-violet-600/20;
+  }
+
+  /* Controls that sit on the night surface. */
+  .glass {
+    @apply bg-white/[0.08] ring-1 ring-inset ring-white/10 backdrop-blur-xl;
+  }
+
+  /* Image scrim so white type always reads on a photo. */
+  .scrim {
+    background-image: linear-gradient(180deg, rgb(2 6 23 / 0) 35%, rgb(2 6 23 / 0.82) 100%);
+  }
+
+  /* A branded stand-in behind every photo: if the image is slow or fails, the
+     card still looks designed rather than broken. */
+  .photo-fallback {
+    background-color: #2a1414;
+    background-image:
+      radial-gradient(circle at 25% 20%, rgb(225 29 72 / 0.55), transparent 55%),
+      radial-gradient(circle at 80% 70%, rgb(124 58 237 / 0.35), transparent 55%),
+      linear-gradient(135deg, #3b1d1d, #1e1b2e);
+  }
+
+  /* ── The receipt: Tixit's ticket perforation, reused for bills. ── */
+  .perforation {
+    @apply relative flex h-5 items-center;
+  }
+  .perforation::before,
+  .perforation::after {
+    @apply absolute block h-5 w-5 rounded-full bg-ink-50 ring-1 ring-ink-200;
+    content: '';
+  }
+  .perforation::before {
+    left: -0.625rem;
+    clip-path: inset(0 0 0 50%);
+  }
+  .perforation::after {
+    right: -0.625rem;
+    clip-path: inset(0 50% 0 0);
+  }
+  .perforation > i {
+    @apply mx-4 h-px flex-1;
+    background-image: linear-gradient(to right, theme('colors.ink.300') 0 6px, transparent 6px 12px);
+    background-size: 12px 1px;
+    background-repeat: repeat-x;
+  }
+
+  /* Bottom docks clear the iOS home indicator. */
+  .safe-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

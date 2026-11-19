@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ImagePlus, Plus, Trash2, Upload } from 'lucide-react';
-import { api, ApiError, API_URL, tokenStore } from '@/lib/api';
+import { api, ApiError, authorizedFetch } from '@/lib/api';
 import type { Category, City } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Alert, Field, Input, Select, Textarea } from '@/components/ui/index';
@@ -181,12 +181,7 @@ export function EventForm({ eventId }: { eventId?: string }) {
       body.append('folder', 'events');
 
       // FormData must not carry a JSON content-type, so this bypasses `api`.
-      const response = await fetch(`${API_URL}/uploads/image`, {
-        method: 'POST',
-        headers: tokenStore.access ? { authorization: `Bearer ${tokenStore.access}` } : {},
-        body,
-        credentials: 'include',
-      });
+      const response = await authorizedFetch('/uploads/image', { method: 'POST', body });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error?.message ?? 'Upload failed');
 

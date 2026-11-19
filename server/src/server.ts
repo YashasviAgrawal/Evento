@@ -13,6 +13,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Without a shared cookie domain the apps cannot see the session hint, and
+  // signing in on one Tixit app would not carry over to the others.
+  if (env.isProd && !env.auth.cookieDomain) {
+    logger.warn('COOKIE_DOMAIN is not set — single sign-on across Tixit apps (www, dine-in) will not work');
+  }
+
   const app = createApp();
   const server = app.listen(env.port, () => {
     logger.info(

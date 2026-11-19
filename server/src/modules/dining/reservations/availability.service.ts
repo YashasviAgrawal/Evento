@@ -36,7 +36,7 @@ export interface SlotView {
   time: string;
   remaining: number;
   maxParty: number;
-  offer: { id: string; label: string } | null;
+  offer: { id: string; label: string; percentOff: number | null; flatOffPaise: number | null } | null;
 }
 
 /** Headline of an offer for a slot chip: "30% off", "₹200 off". */
@@ -84,7 +84,9 @@ function toSlotView(row: SlotRow, offers: EngineOffer[]): SlotView {
     time: `${hh}:${mm}`,
     remaining: Number(row.remaining),
     maxParty: row.max_party,
-    offer: offer ? { id: offer.id, label: offerHeadline(offer) } : null,
+    offer: offer
+      ? { id: offer.id, label: offerHeadline(offer), percentOff: offer.percentOff, flatOffPaise: offer.flatOffPaise }
+      : null,
   };
 }
 

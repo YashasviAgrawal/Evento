@@ -3,7 +3,7 @@
 > **dinein.tixit.in** · Table reservations + in-app bill payment, under the Tixit brand, on the
 > same account, API and database as **www.tixit.in**.
 
-Status: proposal · Owner: Tixit core · Last updated: 19 Nov 2026
+Status: P0 + P1 + P2 implemented (see §15) · Owner: Tixit core · Last updated: 19 Nov 2026
 
 ---
 
@@ -642,3 +642,30 @@ the hero is text-first).
 4. **Razorpay Route.** Needs to be enabled on the merchant account. Until it is, settlement records manual UTRs, as event payouts already do.
 5. **Launch city / clusters** and the default commission (the research supports 4–12% of net sales; we suggest **6%** with the first 90 days free).
 6. **Cashback in P3**: Tixit Wallet shared across events and dining (recommended), or dining-only?
+
+---
+
+## 15. Implementation status (19 Nov 2026)
+
+**Built and tested:** SSO (§3, all six acceptance scenarios checked in a real browser across
+:3000/:3001/:4000), shared packages, partner memberships, the `dining` and `finance` schemas, catalog
+and discovery, availability and reservations, the offer engine, Pay Bill with idempotent gateway
+orders, the rotating verification pass, partner Live/Reservations/Offers/Payouts, admin onboarding
+and settlement API, verified reviews, seed data. Server suite: 82 tests (engine property checks,
+ledger balance, SSO race and replay, full dine-in loop over HTTP).
+
+**Where the build differs from the plan, deliberately:**
+
+| Plan | Built | Why |
+| --- | --- | --- |
+| `@tixit/api-client` + `@tixit/auth` | One `@tixit/session` package | The API client and the session are one concern (the client refreshes the session); splitting them only added an import cycle. |
+| Restore npm workspaces | Source packages via `tsconfig` paths + `resolve.modules` | Keeps each app's own `package.json`/lockfile, the layout Hostinger already builds, with no duplication. See `packages/README.md`. |
+| Slot materialisation job | Materialised on first read (`ON CONFLICT DO NOTHING`) | Nothing to schedule or forget; every booking still locks a real row. |
+| SSE for the partner feed | 4-second polling of one endpoint | Works behind any proxy with no long-lived connections; the query is two indexed scans. SSE can replace it without touching the UI. |
+| `offers.version` column | Offer snapshot frozen on each bill (`pricing`) and reservation (`offer_snapshot`) | Same guarantee — edits never rewrite what a diner was promised or charged — with no version table. |
+
+**Not built yet (next):** pg-boss (dine-in adds two light in-process jobs, auto-verify and abandoned
+bills; the existing single-instance note in the README still applies), phone OTP via SMS, Razorpay
+Route transfers (settlements are recorded with a UTR, as event payouts are), cover-charge bookings,
+bank offers, wallet/cashback, an admin UI for dining (the API exists), and the outbox for
+cross-module events (bill capture posts to the ledger in the same transaction instead).

@@ -1,0 +1,34 @@
+{
+  "name": "@tixit/dinein",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tixit Dine-in (dinein.tixit.in) — table reservations and Pay Bill, on the shared Tixit account",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p ${PORT:-3001}",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.108.0",
+    "clsx": "^2.1.1",
+    "dotenv": "^16.6.1",
+    "lucide-react": "^0.468.0",
+    "next": "^15.5.29",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^2.5.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.6.2",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^15.5.29",
+    "postcss": "^8.5.33",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3"
+  }
+}

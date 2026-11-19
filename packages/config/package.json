@@ -1,0 +1,8 @@
+{
+  "name": "@tixit/config",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tixit Tailwind preset — brand tokens shared by every Tixit app",
+  "main": "tailwind-preset.cjs",
+  "peerDependencies": { "tailwindcss": "^3.4.0" }
+}

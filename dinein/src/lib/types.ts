@@ -1,0 +1,252 @@
+/**
+ * Dine-in API shapes, mirroring `server/src/modules/dining`. Money is always
+ * integer paise; dates arrive as ISO strings.
+ */
+
+export type OfferAppliesTo = 'prebook' | 'walkin' | 'both';
+
+export interface SlotView {
+  id: string;
+  startsAt: string;
+  time: string;
+  remaining: number;
+  maxParty: number;
+  offer: { id: string; label: string; percentOff: number | null; flatOffPaise: number | null } | null;
+  available?: boolean;
+}
+
+export interface RestaurantCard {
+  id: string;
+  slug: string;
+  name: string;
+  locality: string;
+  city: { name: string; slug: string };
+  cuisines: string[];
+  tags: string[];
+  costForTwoPaise: number;
+  coverUrl: string | null;
+  logoUrl: string | null;
+  rating: number;
+  ratingCount: number;
+  payBillEnabled: boolean;
+  bookingEnabled: boolean;
+  isFeatured: boolean;
+  openNow: boolean;
+  closesAt: string | null;
+  distanceKm: number | null;
+  bestOffer: { label: string; appliesTo: OfferAppliesTo; percentOff: number | null; flatOffPaise: number | null } | null;
+  nextSlots?: SlotView[];
+}
+
+export interface Offer {
+  id: string;
+  owner: 'restaurant' | 'platform' | 'bank' | 'membership';
+  code: string | null;
+  title: string;
+  description: string | null;
+  kind: 'percent' | 'flat';
+  percentOff: number | null;
+  flatOffPaise: number | null;
+  maxDiscountPaise: number | null;
+  minBillPaise: number;
+  appliesTo: OfferAppliesTo;
+  days: number[];
+  startTime: string;
+  endTime: string;
+  schedule: string;
+  validUntil: string | null;
+  perUserLimit: number | null;
+  restaurantFundedPct: number;
+  terms: string | null;
+  status: 'draft' | 'active' | 'paused' | 'archived';
+}
+
+export interface RestaurantDetail extends RestaurantCard {
+  description: string | null;
+  address: string;
+  phone: string | null;
+  lat: number;
+  lng: number;
+  hours: Record<string, Array<[string, string]>>;
+  opensAt: string | null;
+  serviceChargePercent: number;
+  timezone: string;
+  gallery: Array<{ kind: string; url: string; caption: string | null }>;
+  offers: Offer[];
+  reviews: Array<{ rating: number; body: string | null; reply: string | null; createdAt: string; author: string }>;
+  ratingDistribution: Array<{ stars: number; count: number }>;
+}
+
+export interface HomeFeed {
+  city: { id: string; name: string; slug: string };
+  restaurantCount: number;
+  tonight: RestaurantCard[];
+  bestOffers: RestaurantCard[];
+  topRated: RestaurantCard[];
+  collections: Array<{ slug: string; title: string; subtitle: string | null; coverUrl: string | null; count: number }>;
+  cuisines: Array<{ name: string; count: number }>;
+}
+
+export interface CollectionPage {
+  slug: string;
+  title: string;
+  subtitle: string | null;
+  coverUrl: string | null;
+  restaurants: RestaurantCard[];
+}
+
+export type ReservationStatus =
+  | 'pending_payment'
+  | 'placed'
+  | 'confirmed'
+  | 'seated'
+  | 'completed'
+  | 'cancelled_by_diner'
+  | 'cancelled_by_restaurant'
+  | 'no_show'
+  | 'expired';
+
+export interface Reservation {
+  id: string;
+  code: string;
+  status: ReservationStatus;
+  startsAt: string;
+  localDate: string;
+  partySize: number;
+  occasion: string | null;
+  notes: string | null;
+  guestName: string;
+  offer: { title: string; headline: string } | null;
+  restaurant: {
+    id: string;
+    slug: string;
+    name: string;
+    locality: string;
+    address: string;
+    coverUrl: string | null;
+    phone: string | null;
+    lat: number;
+    lng: number;
+  };
+  canCancel: boolean;
+  createdAt: string;
+  acceptedAt: string | null;
+  seatedAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+}
+
+export interface PricingLine {
+  key: string;
+  label: string;
+  amountPaise: number;
+  fundedBy?: 'restaurant' | 'platform' | 'shared';
+  note?: string;
+}
+
+export interface BillPricing {
+  engineVersion: string;
+  billTotalPaise: number;
+  nonDiscountablePaise: number;
+  restaurantOffer: { title: string; discountPaise: number } | null;
+  coupon: { code: string | null; title: string; discountPaise: number } | null;
+  couponError: string | null;
+  serviceChargePaise: number;
+  tipPaise: number;
+  convenienceFeePaise: number;
+  totalDiscountPaise: number;
+  amountPayablePaise: number;
+  lines: PricingLine[];
+}
+
+export interface BillQuote extends BillPricing {
+  mode: 'prebook' | 'walkin';
+}
+
+export type BillStatus = 'pending_payment' | 'paid' | 'verified' | 'disputed' | 'failed' | 'cancelled' | 'refunded';
+
+export interface Bill {
+  id: string;
+  code: string;
+  status: BillStatus;
+  restaurant: { id: string; slug: string; name: string; locality: string; coverUrl: string | null; logoUrl: string | null };
+  reservationCode: string | null;
+  pricing: BillPricing;
+  amountPaidPaise: number;
+  pass: { code: string; stepEndsAt: string; stepSeconds: number; serverNow: string } | null;
+  verifiedAt: string | null;
+  verificationMethod: string | null;
+  disputeReason: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  canReview: boolean;
+}
+
+export interface BillCheckout {
+  code: string;
+  orderId: string;
+  amountPaise: number;
+  currency: string;
+  keyId: string | null;
+  mockMode: boolean;
+  mockPaymentId?: string;
+  mockSignature?: string;
+  restaurantName: string;
+  prefill: { name: string; email: string; contact: string };
+}
+
+/* ── partner ── */
+
+export type Capability = 'bills.verify' | 'reservations.manage' | 'offers.manage' | 'payouts.view' | 'insights.view';
+
+export interface PartnerRestaurant {
+  id: string;
+  slug: string;
+  name: string;
+  locality: string;
+  coverUrl: string | null;
+  status: string;
+  role: 'owner' | 'manager' | 'host' | 'cashier' | 'admin';
+  capabilities: Capability[];
+}
+
+export interface PartnerBill {
+  code: string;
+  status: BillStatus;
+  billTotalPaise: number;
+  amountPaidPaise: number;
+  totalDiscountPaise: number;
+  restaurantPayoutPaise: number;
+  dinerName: string;
+  phoneLast4: string | null;
+  reservationCode: string | null;
+  passCode: string | null;
+  stepEndsAt: string | null;
+  paidAt: string | null;
+  verifiedAt: string | null;
+  verificationMethod: string | null;
+  disputeReason: string | null;
+}
+
+export interface PartnerLive {
+  restaurant: { id: string; name: string; role: PartnerRestaurant['role'] };
+  summary: {
+    date: string;
+    billsPaid: number;
+    grossSalesPaise: number;
+    billsToVerify: number;
+    payoutEarnedPaise: number;
+    covers: number;
+    tables: number;
+    pendingRequests: number;
+  };
+  bills: PartnerBill[];
+  reservations: Reservation[];
+  serverNow: string;
+}
+
+export interface Payouts {
+  balancePaise: number;
+  movements: Array<{ kind: string; memo: string | null; occurredAt: string; amountPaise: number }>;
+  settlements: Array<{ reference: string; amountPaise: number; utr: string | null; status: string; createdAt: string }>;
+}

@@ -11,6 +11,8 @@ Built to the PRD in `docs/PRD.md`, on the stack it specifies.
 ## Contents
 
 - [What's built](#whats-built)
+- [Tixit Dine-in](#tixit-dine-in)
+- [Single sign-on](#single-sign-on)
 - [Tech stack](#tech-stack)
 - [Quick start](#quick-start)
 - [Demo accounts](#demo-accounts)
@@ -82,6 +84,62 @@ expiry and reminders, and an append-only audit log.
 
 ---
 
+## Tixit Dine-in
+
+**dinein.tixit.in** — book a table, pay the restaurant bill in the app, keep the savings. It is a
+second Next.js app (`dinein/`) on the **same API, database and account** as www.tixit.in. The full
+product and engineering plan is in [`docs/dinein/PLAN.md`](docs/dinein/PLAN.md).
+
+| Diner | Where |
+| --- | --- |
+| Night-surface home: intent chips, live "tables tonight" with one-tap slot chips, collections, offers | `/` |
+| Search with URL-backed filters (near me, open now, offers, tags, cuisine, budget, sort) | `/restaurants` |
+| Restaurant page: gallery, pre-book vs walk-in offers in plain words, hours, verified reviews, JSON-LD | `/r/[slug]` |
+| Booking sheet: guests → day → time, each slot shows the offer it locks in | `/r/[slug]?book=1` |
+| Pay Bill: custom keypad, items-not-on-offer, opt-in service charge, tip, promo code, itemised receipt | `/pay`, `/pay/[slug]` |
+| Live payment pass: 30-second rotating code, server-synced clock, flips to "Verified" | `/bills/[code]` |
+| Your plans: upcoming/past tables, payments, cancel, pay from a booking | `/bookings` |
+
+| Restaurant partner (by membership role) | Where |
+| --- | --- |
+| Live: payments to verify (same rotating code as the diner) with chime, arrivals, today's numbers | `/partner/[id]` |
+| Reservations by day: accept, decline, seat, complete, no-show | `/partner/[id]/reservations` |
+| Offers: create, edit, pause, remove — the restaurant sets the depth | `/partner/[id]/offers` |
+| Payouts from the ledger, settlements, 7-day sales | `/partner/[id]/payouts` |
+
+Admin endpoints under `/api/v1/admin/dining` onboard restaurants, set commission, add staff and
+record settlements.
+
+How the money works: one pure pricing engine (`server/src/modules/dining/offers/engine.ts`) prices
+both the quote and the charge; every captured bill posts a balanced entry to a double-entry ledger
+(`finance` schema) whose balance trigger rejects anything that does not sum to zero. Bills are
+idempotent (`Idempotency-Key`), the webhook and client verify share one guarded capture, and
+reservations use the same row-lock + CHECK pattern as ticket inventory.
+
+Demo: `partner@tixit.test` owns Ember & Oak and Terrace at Nahargarh View; `cashier@tixit.test` is a
+cashier at Ember & Oak; codes `TIXITDINE` (₹100 off over ₹800) and `FIRSTBITE` (10% off).
+
+## Single sign-on
+
+One account, signed in on every Tixit app at once.
+
+- The refresh credential is an **HttpOnly `tx_rt` cookie on the API host** (`api.tixit.in`), which
+  both `www.tixit.in` and `dinein.tixit.in` send because they are same-site with it.
+- Access tokens live **in memory only**; on boot each app calls `POST /auth/refresh`, which returns
+  the token *and* the user. No tokens are kept in `localStorage` (pre-SSO tokens are exchanged once
+  and deleted).
+- A readable, non-secret `tx_session` hint cookie (`COOKIE_DOMAIN=.tixit.in`) lets apps skip the call
+  for anonymous visitors and notice sign-in/sign-out made in the *other* app when a tab regains focus.
+- Refresh tokens form **families**: two apps refreshing at the same instant get a grace window
+  instead of signing each other out; a replay after the window revokes the whole family.
+- Cookie-authenticated refresh/logout require the `X-Tixit-Client` header (CSRF guard).
+
+Shared frontend code lives in [`packages/`](packages/README.md): `@tixit/config` (Tailwind brand
+preset), `@tixit/session` (API client, session, `AuthProvider`, Google button, Razorpay checkout) and
+`@tixit/ui` (`cn`, `Button`, `Toast`). Each app keeps its own `package.json` and lockfile.
+
+---
+
 ## Tech stack
 
 Exactly as specified in the PRD:
@@ -125,6 +183,7 @@ npm run dev
 ```
 
 - Web → <http://localhost:3000>
+- Dine-in → <http://localhost:3001> (`cd dinein && npm install && npm run dev`)
 - API → <http://localhost:4000> (health at `/health`)
 
 Useful scripts:
@@ -232,11 +291,20 @@ Tixit/
 │       ├── services/              mail, storage, settings, audit, Razorpay
 │       ├── jobs/                  hold expiry, reminders, housekeeping
 │       └── utils/                 money, ids, signing, csv, dates, http
-└── web/                           Next.js client
-    └── src/
-        ├── app/                   routes (public, account, organizer, admin, cms)
-        ├── components/            UI kit, layout, dashboard, event, auth, cms
-        └── lib/                   API client, types, formatting, Razorpay loader
+│       ├── modules/dining/        catalog, availability, reservations, offers engine,
+│       │                          Pay Bill, partner console API, admin onboarding
+│       ├── modules/finance/       double-entry ledger
+├── web/                           www.tixit.in — Next.js client
+│   └── src/
+│       ├── app/                   routes (public, account, organizer, admin, cms)
+│       ├── components/            UI kit, layout, dashboard, event, auth, cms
+│       └── lib/                   types, formatting (API client re-exported from @tixit/session)
+├── dinein/                        dinein.tixit.in — Next.js client
+│   └── src/
+│       ├── app/                   home, restaurants, r/[slug], pay, bills, bookings, auth, partner
+│       ├── components/            shell, restaurant, booking, pay, partner, ui
+│       └── lib/                   DTO types, formatting, query cache
+└── packages/                      source shared by both apps (config, session, ui)
 ```
 
 ---
@@ -360,6 +428,12 @@ Notes for a real deployment:
 - Background jobs run in-process. Behind more than one API instance, move them to a single worker
   or wrap them in an advisory lock so reminders are not sent twice.
 - Rate limiting is in-memory; swap in the Redis store for a multi-instance deployment.
+- **Single sign-on** needs the API on a `tixit.in` subdomain (`api.tixit.in`), `COOKIE_DOMAIN=.tixit.in`,
+  both origins in `CORS_ORIGINS`, and both origins on the Google OAuth client. The API warns at start
+  if `COOKIE_DOMAIN` is missing in production.
+- **Dine-in** deploys like `web`: `cd dinein && npm ci && npm run build && npm start` (honours `$PORT`).
+  Both Next apps read `../packages`, so the Hostinger app must have the whole repository checked out.
+  `outputFileTracingRoot` is the repo root, so a standalone server is at `.next/standalone/<app>/server.js`.
 
 ---
 

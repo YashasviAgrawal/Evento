@@ -21,7 +21,16 @@ const publicEnv = Object.fromEntries(
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  outputFileTracingRoot: configDir,
+  // The repo root, so the standalone build traces files in ../packages too.
+  outputFileTracingRoot: path.resolve(configDir, '..'),
+  // Shared Tixit packages are source in ../packages (see packages/README.md).
+  experimental: { externalDir: true },
+  webpack(config) {
+    // Resolve every import inside ../packages from this app's node_modules, so
+    // there is exactly one React, one Next and no install step for packages.
+    config.resolve.modules = [path.join(configDir, 'node_modules'), 'node_modules'];
+    return config;
+  },
   reactStrictMode: true,
   poweredByHeader: false,
   env: publicEnv,

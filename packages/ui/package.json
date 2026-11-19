@@ -1,0 +1,14 @@
+{
+  "name": "@tixit/ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "UI primitives every Tixit app renders identically",
+  "main": "src/index.ts",
+  "peerDependencies": {
+    "clsx": "^2.1.0",
+    "lucide-react": ">=0.400.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "tailwind-merge": "^2.5.0"
+  }
+}

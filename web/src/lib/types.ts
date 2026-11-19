@@ -2,19 +2,8 @@
 
 export type Role = 'admin' | 'organizer' | 'customer';
 
-export interface User {
-  id: string;
-  fullName: string;
-  email: string;
-  phone: string | null;
-  role: Role;
-  status: string;
-  avatarUrl: string | null;
-  cityId: string | null;
-  emailVerified: boolean;
-  createdAt: string;
-  organizer?: { id: string; displayName: string; slug: string; status: string } | null;
-}
+/** The signed-in account — defined once, in the shared session package. */
+export type { SessionUser as User } from '@tixit/session';
 
 export interface Category {
   id: string;

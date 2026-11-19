@@ -1,0 +1,11 @@
+{
+  "name": "@tixit/session",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tixit API client and single sign-on session, shared by every Tixit web app",
+  "main": "src/index.ts",
+  "peerDependencies": {
+    "next": "^15.0.0",
+    "react": "^19.0.0"
+  }
+}
