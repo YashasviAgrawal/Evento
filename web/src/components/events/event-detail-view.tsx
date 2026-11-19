@@ -16,6 +16,7 @@ import { TicketSelector } from '@/components/events/ticket-selector';
 import { ShareButton } from '@/components/events/share-button';
 import { AddToCalendar } from '@/components/events/add-to-calendar';
 import { EventCard } from '@/components/events/event-card';
+import { NearbyDining } from '@/components/dinein/nearby-dining';
 import { Badge, StatusBadge } from '@/components/ui/index';
 import { formatEventDate, formatEventDateTime, formatEventTime, formatNumber, priceLabel } from '@/lib/format';
 
@@ -193,6 +194,10 @@ export function EventDetailView({ event, relatedEvents }: { event: EventDetail; 
                 />
               </div>
             </section>
+
+            {event.venue.latitude !== null && event.venue.longitude !== null && (
+              <NearbyDining lat={event.venue.latitude} lng={event.venue.longitude} city={event.city.name} />
+            )}
 
             {/* ── Organizer ── */}
             <section>

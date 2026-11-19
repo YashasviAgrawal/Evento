@@ -13,6 +13,7 @@ const publicEnv = Object.fromEntries(
     'NEXT_PUBLIC_SITE_NAME',
     'NEXT_PUBLIC_SITE_URL',
     'NEXT_PUBLIC_GOOGLE_CLIENT_ID',
+    'NEXT_PUBLIC_DINEIN_URL',
   ]
     .map((key) => [key, process.env[key]])
     .filter(([, value]) => typeof value === 'string' && value !== ''),

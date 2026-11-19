@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Facebook, Instagram, Mail, MapPin, Phone, Twitter } from 'lucide-react';
+import { dineinUrl } from '@/lib/dinein';
 
 const COLUMNS = [
   {
@@ -11,6 +12,7 @@ const COLUMNS = [
       { href: '/events?when=weekend', label: 'This Weekend' },
       { href: '/events?price=free', label: 'Free Events' },
       { href: '/events?sort=popular', label: 'Trending' },
+      { href: dineinUrl('/'), label: 'Tixit Dine-in' },
     ],
   },
   {
@@ -41,6 +43,10 @@ const COLUMNS = [
       { href: '/privacy', label: 'Privacy Policy' },
       { href: '/refunds', label: 'Refund Policy' },
       { href: '/support', label: 'Help & Support' },
+      // Privacy centre and grievance redressal are account-wide; they live on
+      // the dine-in app but cover both, under the DPDP Act.
+      { href: dineinUrl('/account/privacy'), label: 'Privacy settings' },
+      { href: dineinUrl('/grievance'), label: 'Grievance Officer' },
     ],
   },
 ];

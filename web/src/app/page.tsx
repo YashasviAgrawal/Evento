@@ -22,6 +22,7 @@ import { fetchPublic } from '@/lib/api';
 import type { City, HomeFeed } from '@/lib/types';
 import { EventCard } from '@/components/events/event-card';
 import { Hero } from '@/components/home/hero';
+import { DineinRail } from '@/components/dinein/dinein-rail';
 import { ButtonLink } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/index';
 
@@ -172,6 +173,9 @@ export default async function HomePage() {
         href="/events?sort=date"
         events={feed.upcoming}
       />
+
+      {/* ── Dine-in cross-sell ── */}
+      <DineinRail />
 
       {/* ── Popular cities ── */}
       <section className="container-page py-12">

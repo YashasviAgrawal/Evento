@@ -278,6 +278,25 @@ const EVENTS: SeedEvent[] = [
     status: 'draft',
     tiers: [{ name: 'Seated', kind: 'regular', price: 2200, qty: 80, max: 4 }],
   },
+  {
+    // Jaipur is where Dine-in launches, so this is the event that shows the
+    // "Eat nearby before the show" cross-sell end to end.
+    title: 'Sufi Nights at Jawahar Kala Kendra',
+    subtitle: 'Qawwali under the stars',
+    categorySlug: 'music',
+    citySlug: 'jaipur',
+    organizerIndex: 1,
+    daysFromNow: 9,
+    durationHours: 3,
+    banner: 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=1600&q=80',
+    description:
+      'A full qawwali ensemble in the open-air amphitheatre at JKK, with a set of Rajasthani folk to open.\n\nSeating is on cushions and chairs; arrive early for the front rows.',
+    tags: ['sufi', 'qawwali', 'live music'],
+    tiers: [
+      { name: 'General', kind: 'regular', price: 599, qty: 500, max: 6 },
+      { name: 'Front Rows', kind: 'vip', price: 1299, qty: 80, max: 4 },
+    ],
+  },
 ];
 
 const VENUES: Record<string, { name: string; address: string; lat: number; lng: number; capacity: number }> = {
@@ -289,6 +308,7 @@ const VENUES: Record<string, { name: string; address: string; lat: number; lng: 
   hyderabad: { name: 'Hitex Exhibition Centre', address: 'Izzat Nagar, Kothaguda', lat: 17.4787, lng: 78.3762, capacity: 8000 },
   kolkata: { name: 'Victoria Memorial Lawns', address: '1 Queens Way, Maidan', lat: 22.5448, lng: 88.3426, capacity: 4000 },
   chennai: { name: 'Marina Beach Promenade', address: 'Kamarajar Salai, Marina', lat: 13.0500, lng: 80.2824, capacity: 10000 },
+  jaipur: { name: 'Jawahar Kala Kendra', address: '2 Jawahar Lal Nehru Marg', lat: 26.8935, lng: 75.8130, capacity: 1200 },
   ahmedabad: { name: 'Science City Auditorium', address: 'Sola–Santej Road, Hebatpur', lat: 23.0742, lng: 72.5079, capacity: 2500 },
 };
 

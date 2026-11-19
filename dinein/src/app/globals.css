@@ -110,16 +110,6 @@
     background-image: linear-gradient(180deg, rgb(2 6 23 / 0) 35%, rgb(2 6 23 / 0.82) 100%);
   }
 
-  /* A branded stand-in behind every photo: if the image is slow or fails, the
-     card still looks designed rather than broken. */
-  .photo-fallback {
-    background-color: #2a1414;
-    background-image:
-      radial-gradient(circle at 25% 20%, rgb(225 29 72 / 0.55), transparent 55%),
-      radial-gradient(circle at 80% 70%, rgb(124 58 237 / 0.35), transparent 55%),
-      linear-gradient(135deg, #3b1d1d, #1e1b2e);
-  }
-
   /* ── The receipt: Tixit's ticket perforation, reused for bills. ── */
   .perforation {
     @apply relative flex h-5 items-center;

@@ -10,6 +10,7 @@ import { RequireAuth } from '@/components/auth/require-auth';
 import { Button } from '@/components/ui/button';
 import { Alert, Field, Input, StatusBadge } from '@/components/ui/index';
 import { CityPicker } from '@/components/ui/city-picker';
+import { WalletCard } from '@/components/dinein/wallet-card';
 import { useToast } from '@/components/ui/toast';
 import { formatDateTime, initials } from '@/lib/format';
 
@@ -122,6 +123,10 @@ function Profile() {
             {user.organizer && <StatusBadge status={user.organizer.status} />}
           </div>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <WalletCard />
       </div>
 
       {error && (

@@ -12,8 +12,10 @@ import {
   Menu,
   Shield,
   User as UserIcon,
+  UtensilsCrossed,
   X,
 } from 'lucide-react';
+import { dineinUrl } from '@/lib/dinein';
 import { useAuth } from '@/components/providers/auth-provider';
 import { SearchBox } from '@/components/search/search-box';
 import { useMounted } from '@/lib/use-mounted';
@@ -93,6 +95,14 @@ export function Navbar() {
                 {link.label}
               </Link>
             ))}
+            {/* The sister app on dinein.tixit.in — same account, so it opens signed in. */}
+            <a
+              href={dineinUrl('/')}
+              className="ml-1 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-ink-900 transition hover:bg-brand-50 hover:text-brand-700"
+            >
+              <UtensilsCrossed className="h-4 w-4 text-brand-600" /> Dine-in
+              <span className="rounded bg-brand-600 px-1 py-px text-[9px] font-extrabold uppercase tracking-wider text-white">New</span>
+            </a>
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
@@ -209,6 +219,12 @@ export function Navbar() {
                   {link.label}
                 </Link>
               ))}
+              <a
+                href={dineinUrl('/')}
+                className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-ink-900 hover:bg-ink-100"
+              >
+                <UtensilsCrossed className="h-4 w-4 text-brand-600" /> Tixit Dine-in
+              </a>
               <Link
                 href="/list-your-show"
                 className="rounded-lg px-3 py-2.5 text-sm font-semibold text-brand-600 hover:bg-brand-50"
