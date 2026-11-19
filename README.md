@@ -368,6 +368,7 @@ Notes for a real deployment:
 - [`docs/API.md`](docs/API.md) — full REST reference
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — data model, request lifecycle, design decisions
 - [`docs/PRD.md`](docs/PRD.md) — the source requirements
+- [`docs/dinein/PLAN.md`](docs/dinein/PLAN.md) — Tixit Dine-in (dinein.tixit.in) plan, SSO design, and [UI concept](docs/dinein/design-prototype.html)
 
 ## Future features
 

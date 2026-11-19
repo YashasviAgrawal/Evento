@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tixit Dine-in — Design Concept</title>
+<style>
+/* ── Tixit tokens (mirrors web/tailwind.config.ts) + Dine-in additions (PLAN §10.2) ── */
+:root{
+  --brand-50:#fff1f2;--brand-100:#ffe4e6;--brand-200:#fecdd3;--brand-400:#fb7185;--brand-500:#f43f5e;--brand-600:#e11d48;--brand-700:#be123c;
+  --ink-50:#f8fafc;--ink-100:#f1f5f9;--ink-200:#e2e8f0;--ink-300:#cbd5e1;--ink-400:#94a3b8;--ink-500:#64748b;--ink-600:#475569;--ink-700:#334155;--ink-800:#1e293b;--ink-900:#0f172a;--ink-950:#020617;
+  --save:#059669;--save-50:#ecfdf5;--save-100:#d1fae5;
+  --violet:#7c3aed;
+  --shadow-card:0 1px 3px 0 rgb(15 23 42/.06),0 1px 2px -1px rgb(15 23 42/.04);
+  --shadow-lift:0 12px 32px -8px rgb(15 23 42/.16),0 4px 12px -4px rgb(15 23 42/.08);
+  --shadow-dock:0 -8px 24px -12px rgb(15 23 42/.18);
+  --ease:cubic-bezier(.16,1,.3,1);
+  --font:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --page:#eef1f6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--page);color:var(--ink-900);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+.press{transition:transform .15s var(--ease)}.press:active{transform:scale(.97)}
+
+/* ── page chrome ── */
+.intro{background:var(--ink-950);color:#fff;position:relative;overflow:hidden;padding:56px 16px 64px}
+.intro::before{content:"";position:absolute;width:520px;height:520px;left:-160px;top:-200px;border-radius:50%;background:rgb(225 29 72/.32);filter:blur(90px)}
+.intro::after{content:"";position:absolute;width:480px;height:480px;right:-140px;bottom:-260px;border-radius:50%;background:rgb(124 58 237/.22);filter:blur(90px)}
+.intro .wrap{position:relative;max-width:1120px;margin:auto}
+.wordmark{font-weight:900;font-size:28px;letter-spacing:-.04em}.wordmark i{font-style:normal;color:var(--brand-500)}
+.pill{display:inline-flex;align-items:center;gap:8px;border:1px solid rgb(255 255 255/.15);background:rgb(255 255 255/.08);backdrop-filter:blur(8px);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:600}
+.intro h1{font-size:clamp(32px,5vw,52px);line-height:1.08;letter-spacing:-.03em;font-weight:800;margin-top:20px;max-width:760px}
+.grad{background:linear-gradient(90deg,var(--brand-400),var(--brand-600));-webkit-background-clip:text;background-clip:text;color:transparent}
+.intro p{color:var(--ink-300);margin-top:14px;max-width:620px;line-height:1.6}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+.sw{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-300)}.sw b{width:18px;height:18px;border-radius:6px;display:block;box-shadow:inset 0 0 0 1px rgb(255 255 255/.15)}
+
+.board{max-width:1320px;margin:-28px auto 0;padding:0 16px 80px;position:relative}
+.rail{display:flex;gap:28px;overflow-x:auto;padding:8px 4px 28px;scroll-snap-type:x mandatory}
+.rail::-webkit-scrollbar{height:8px}.rail::-webkit-scrollbar-thumb{background:var(--ink-300);border-radius:8px}
+.shot{scroll-snap-align:start;flex:0 0 auto}
+.cap{margin:16px 4px 0;max-width:360px}.cap h3{font-size:14px;font-weight:700}.cap p{font-size:12.5px;color:var(--ink-500);line-height:1.55;margin-top:4px}
+.cap .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;background:var(--brand-600);color:#fff;font-size:11px;font-weight:800;margin-right:6px}
+
+/* ── phone ── */
+.phone{width:360px;height:760px;border-radius:44px;background:#0b0b0f;padding:10px;box-shadow:0 30px 60px -20px rgb(15 23 42/.45),0 0 0 1px rgb(15 23 42/.08)}
+.screen{position:relative;width:100%;height:100%;border-radius:35px;overflow:hidden;background:var(--ink-50);display:flex;flex-direction:column}
+.status{height:40px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:700;position:relative;z-index:5}
+.status.dark{color:#fff}
+.island{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:96px;height:26px;background:#000;border-radius:20px}
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}.scroll::-webkit-scrollbar{display:none}
+
+/* night surface */
+.night{background:var(--ink-950);color:#fff;position:relative;overflow:hidden}
+.night::before{content:"";position:absolute;width:300px;height:300px;left:-120px;top:-140px;border-radius:50%;background:rgb(225 29 72/.38);filter:blur(60px)}
+.night::after{content:"";position:absolute;width:260px;height:260px;right:-120px;top:60px;border-radius:50%;background:rgb(124 58 237/.22);filter:blur(60px)}
+.night>*{position:relative;z-index:1}
+.glass{background:rgb(255 255 255/.08);box-shadow:inset 0 0 0 1px rgb(255 255 255/.1);backdrop-filter:blur(16px)}
+
+/* app switcher */
+.switch{display:inline-flex;padding:3px;border-radius:999px;font-size:12px;font-weight:700}
+.switch span{white-space:nowrap;padding:6px 11px;border-radius:999px;color:var(--ink-300)}
+.switch span.on{background:#fff;color:var(--ink-900);box-shadow:var(--shadow-card)}
+
+.chip{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border-radius:999px;padding:8px 13px;font-size:12.5px;font-weight:600}
+.chip.light{background:#fff;box-shadow:inset 0 0 0 1px var(--ink-200);color:var(--ink-700)}
+.hscroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}.hscroll::-webkit-scrollbar{display:none}
+
+.badge-save{display:inline-flex;align-items:center;gap:4px;background:#fff;color:var(--save);font-weight:800;font-size:11.5px;border-radius:8px;padding:5px 8px;box-shadow:var(--shadow-card)}
+.badge-save.soft{background:var(--save-50);box-shadow:inset 0 0 0 1px var(--save-100)}
+.rating{display:inline-flex;align-items:center;gap:3px;background:var(--save);color:#fff;font-weight:800;font-size:11.5px;border-radius:7px;padding:3px 7px}
+
+.img{background-size:cover;background-position:center;background-color:#3b1d1d}
+.img.a{background-image:linear-gradient(180deg,transparent 40%,rgb(2 6 23/.85)),url('https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=70'),radial-gradient(circle at 30% 30%,#a8552e,#2a1414)}
+.img.b{background-image:linear-gradient(180deg,transparent 40%,rgb(2 6 23/.85)),url('https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&q=70'),radial-gradient(circle at 70% 40%,#8a6a3a,#1d1a14)}
+.img.c{background-image:linear-gradient(180deg,transparent 30%,rgb(2 6 23/.8)),url('https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=70'),radial-gradient(circle at 40% 60%,#5a3d6e,#140f1d)}
+.img.d{background-image:linear-gradient(180deg,rgb(2 6 23/.45),transparent 30%,transparent 60%,rgb(2 6 23/.6)),url('https://images.unsplash.com/photo-1552566626-52f8b828add9?w=900&q=70'),radial-gradient(circle at 50% 40%,#9b4a2c,#1f1210)}
+.img.e{background-image:url('https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&q=70'),radial-gradient(circle,#b0642a,#3a1d0d)}
+
+/* cards */
+.rcard{border-radius:20px;overflow:hidden;background:#fff;box-shadow:var(--shadow-card),inset 0 0 0 1px var(--ink-200)}
+.rcard .img{height:150px;position:relative}
+.rcard .img .badge-save{position:absolute;left:10px;top:10px}
+.rcard .img .fav{position:absolute;right:10px;top:10px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center}
+.rcard .img .title{position:absolute;left:12px;right:12px;bottom:10px;color:#fff}
+.rcard .img .title b{font-size:17px;letter-spacing:-.01em}.rcard .img .title small{display:block;font-size:12px;color:rgb(255 255 255/.8);margin-top:2px}
+.slots{display:flex;gap:6px;padding:10px 12px 12px}
+.slot{flex:1;border-radius:10px;padding:7px 0;text-align:center;box-shadow:inset 0 0 0 1px var(--ink-200);font-size:12px;font-weight:700}
+.slot small{display:block;font-size:10.5px;color:var(--save);font-weight:700;margin-top:1px}
+.slot.hot{background:var(--save-50);box-shadow:inset 0 0 0 1px var(--save-100)}
+
+.sec{padding:20px 16px 4px;display:flex;align-items:baseline;justify-content:space-between}
+.sec h4{font-size:17px;font-weight:800;letter-spacing:-.01em}.sec a{font-size:12.5px;color:var(--brand-600);font-weight:700;text-decoration:none}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+
+.tabbar{flex:0 0 auto;display:flex;justify-content:space-around;background:rgb(255 255 255/.92);backdrop-filter:blur(12px);box-shadow:var(--shadow-dock);padding:8px 0 18px}
+.tabbar div{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--ink-400)}
+.tabbar div.on{color:var(--brand-600)}
+.ico{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.ico.s{width:16px;height:16px}
+
+.dock{flex:0 0 auto;display:flex;gap:10px;padding:12px 14px 22px;background:#fff;box-shadow:var(--shadow-dock)}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:52px;border-radius:14px;font-weight:700;font-size:15px}
+.btn.primary{background:var(--brand-600);color:#fff;box-shadow:0 8px 20px -8px rgb(225 29 72/.6)}
+.btn.dark{background:var(--ink-900);color:#fff}
+.btn.ghost{box-shadow:inset 0 0 0 1px var(--ink-300);background:#fff}
+.btn.full{width:100%}
+
+/* restaurant page */
+.hero-img{height:300px;position:relative;flex:0 0 auto}
+.hero-img .topbar{position:absolute;left:14px;right:14px;top:6px;display:flex;justify-content:space-between}
+.round{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:#fff}
+.dots{position:absolute;bottom:56px;left:0;right:0;display:flex;justify-content:center;gap:5px}
+.dots i{width:6px;height:6px;border-radius:9px;background:rgb(255 255 255/.5)}.dots i.on{width:18px;background:#fff}
+.sheet-top{margin-top:-40px;background:var(--ink-50);border-radius:26px 26px 0 0;position:relative;padding:18px 16px 0}
+.offers{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.offer{border-radius:16px;padding:12px;background:#fff;box-shadow:inset 0 0 0 1px var(--ink-200)}
+.offer.best{background:linear-gradient(135deg,var(--save-50),#fff);box-shadow:inset 0 0 0 1.5px var(--save)}
+.offer b{display:block;font-size:20px;font-weight:900;color:var(--save);letter-spacing:-.02em}
+.offer span{font-size:11.5px;color:var(--ink-500);display:block;margin-top:2px;line-height:1.4}
+.daystrip{display:flex;gap:8px;margin-top:10px}
+.day{flex:0 0 52px;border-radius:14px;padding:8px 0;text-align:center;background:#fff;box-shadow:inset 0 0 0 1px var(--ink-200)}
+.day small{display:block;font-size:10.5px;font-weight:700;color:var(--ink-400);text-transform:uppercase}
+.day b{font-size:17px}
+.day.on{background:var(--ink-900);color:#fff;box-shadow:none}.day.on small{color:var(--ink-300)}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.fact{background:#fff;border-radius:14px;padding:10px;box-shadow:inset 0 0 0 1px var(--ink-200)}
+.fact small{font-size:10.5px;color:var(--ink-400);font-weight:700;text-transform:uppercase;letter-spacing:.05em}.fact b{display:block;font-size:13px;margin-top:2px}
+
+/* booking sheet */
+.scrim{position:absolute;inset:0;background:rgb(2 6 23/.55);z-index:6}
+.bsheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:28px 28px 0 0;z-index:7;padding:10px 16px 22px;box-shadow:0 -20px 40px -10px rgb(2 6 23/.4)}
+.grab{width:40px;height:5px;border-radius:9px;background:var(--ink-200);margin:0 auto 12px}
+.stepper{display:flex;align-items:center;justify-content:space-between;background:var(--ink-50);border-radius:16px;padding:8px}
+.stepper button{width:44px;height:44px;border-radius:12px;background:#fff;box-shadow:var(--shadow-card),inset 0 0 0 1px var(--ink-200);font-size:22px;font-weight:600}
+.stepper .v{text-align:center}.stepper .v b{font-size:26px;font-weight:900}.stepper .v small{display:block;font-size:11px;color:var(--ink-500)}
+.lbl{font-size:12px;font-weight:700;color:var(--ink-500);margin:16px 2px 8px;display:flex;justify-content:space-between}
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sg{border-radius:12px;padding:9px 0;text-align:center;box-shadow:inset 0 0 0 1px var(--ink-200);font-weight:700;font-size:13.5px;transition:all .2s var(--ease)}
+.sg small{display:block;font-size:11px;font-weight:700;color:var(--save)}
+.sg.off{color:var(--ink-300);text-decoration:line-through}.sg.off small{color:var(--ink-300)}
+.sg.sel{background:var(--ink-900);color:#fff;box-shadow:0 8px 18px -8px rgb(15 23 42/.6)}.sg.sel small{color:#6ee7b7}
+
+/* pay bill */
+.payhead{padding:8px 16px 0;display:flex;align-items:center;gap:10px}
+.logo{width:40px;height:40px;border-radius:12px;flex:0 0 auto}
+.amount{text-align:center;padding:18px 0 4px}
+.amount small{font-size:12px;color:var(--ink-500);font-weight:600}
+.amount .big{font-size:52px;font-weight:900;letter-spacing:-.04em;line-height:1.1;margin-top:4px}
+.amount .big .cur{font-size:30px;color:var(--ink-400);vertical-align:12px;margin-right:2px}
+.caret{display:inline-block;width:3px;height:42px;background:var(--brand-600);vertical-align:-4px;margin-left:3px;animation:blink 1s steps(2) infinite;border-radius:2px}
+@keyframes blink{50%{opacity:0}}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border-radius:14px;padding:11px 12px;box-shadow:inset 0 0 0 1px var(--ink-200);margin:0 16px 8px}
+.toggle-row b{font-size:13px;display:block}.toggle-row small{font-size:11px;color:var(--ink-500)}
+.tg{width:44px;height:26px;border-radius:99px;background:var(--ink-300);position:relative;flex:0 0 auto;transition:background .2s}
+.tg::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:var(--shadow-card);transition:transform .25s var(--ease)}
+.tg.on{background:var(--brand-600)}.tg.on::after{transform:translateX(18px)}
+.savebar{margin:4px 16px 10px;border-radius:14px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;background:var(--save-50);box-shadow:inset 0 0 0 1px var(--save-100);font-size:12.5px;color:#065f46;font-weight:600}
+.savebar b{font-size:15px}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 14px}
+.key{height:50px;border-radius:14px;font-size:22px;font-weight:600;background:#fff;box-shadow:inset 0 0 0 1px var(--ink-200)}
+.key:active{background:var(--ink-100)}
+
+/* receipt */
+.receipt{margin:14px 16px 0;background:#fff;border-radius:20px;box-shadow:var(--shadow-lift),inset 0 0 0 1px var(--ink-200);overflow:hidden}
+.receipt .rhead{padding:16px;display:flex;gap:12px;align-items:center}
+.perf{position:relative;height:20px;display:flex;align-items:center}
+.perf::before,.perf::after{content:"";position:absolute;width:20px;height:20px;border-radius:50%;background:var(--ink-50);box-shadow:inset 0 0 0 1px var(--ink-200)}
+.perf::before{left:-10px;clip-path:inset(0 0 0 50%)}.perf::after{right:-10px;clip-path:inset(0 50% 0 0)}
+.perf i{flex:1;height:1px;margin:0 16px;background-image:linear-gradient(90deg,var(--ink-300) 0 6px,transparent 6px 12px);background-size:12px 1px}
+.lines{padding:6px 16px 14px}
+.line{display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;font-size:13.5px}
+.line .who{display:block;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-400);margin-top:1px}
+.line.save{color:var(--save);font-weight:600}.line.save .who{color:#34d399}
+.line.muted{color:var(--ink-500)}
+.line.total{border-top:1px dashed var(--ink-200);margin-top:6px;padding-top:12px;font-size:16px;font-weight:800}
+.coupon{margin:12px 16px 0;display:flex;align-items:center;gap:10px;border-radius:14px;padding:11px 12px;background:#fff;box-shadow:inset 0 0 0 1px var(--ink-200);font-size:13px}
+.coupon b{color:var(--brand-600)}
+.secure{display:flex;justify-content:center;gap:6px;align-items:center;font-size:11px;color:var(--ink-400);margin-top:8px}
+
+/* verification pass */
+.pass{flex:1;display:flex;flex-direction:column;align-items:center;padding:6px 20px 22px;text-align:center}
+.sweep{position:absolute;inset:-40%;background:conic-gradient(from 0deg,transparent 0 70%,rgb(244 63 94/.25) 80%,transparent 90%);animation:spin 6s linear infinite;z-index:0!important}
+@keyframes spin{to{transform:rotate(1turn)}}
+.ring{position:relative;width:212px;height:212px;margin-top:18px}
+.ring svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.ring .code{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .code b{font-size:36px;font-weight:900;letter-spacing:.05em;white-space:nowrap}
+.ring .code small{font-size:11px;color:var(--ink-300);font-weight:600;margin-top:2px}
+.clock{font-size:13px;font-weight:700;color:var(--ink-300);display:flex;gap:8px;align-items:center;margin-top:14px}
+.live{width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 0 0 rgb(52 211 153/.7);animation:ping 1.6s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgb(52 211 153/.6)}70%{box-shadow:0 0 0 10px rgb(52 211 153/0)}100%{box-shadow:0 0 0 0 rgb(52 211 153/0)}}
+.flip{perspective:1000px}
+.card3d{transition:transform .8s var(--ease);transform-style:preserve-3d;position:relative}
+.card3d.done{transform:rotateY(180deg)}
+.face{backface-visibility:hidden}
+.back{position:absolute;inset:0;transform:rotateY(180deg);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.okmark{width:96px;height:96px;border-radius:50%;background:var(--save);display:grid;place-items:center;box-shadow:0 0 0 12px rgb(5 150 105/.2),0 0 0 26px rgb(5 150 105/.1)}
+
+/* partner */
+.desk{width:980px;height:600px;border-radius:18px;background:#fff;box-shadow:0 30px 60px -20px rgb(15 23 42/.35),0 0 0 1px rgb(15 23 42/.08);overflow:hidden;display:flex}
+.side{width:200px;background:var(--ink-950);color:#fff;padding:18px 12px;position:relative;overflow:hidden}
+.side::before{content:"";position:absolute;width:220px;height:220px;left:-110px;top:-110px;border-radius:50%;background:rgb(225 29 72/.35);filter:blur(50px)}
+.side>*{position:relative}
+.nav{margin-top:22px;display:flex;flex-direction:column;gap:2px}
+.nav div{padding:9px 10px;border-radius:10px;font-size:13px;color:var(--ink-300);display:flex;gap:9px;align-items:center;font-weight:600}
+.nav div.on{background:rgb(255 255 255/.1);color:#fff}
+.nav .cnt{margin-left:auto;background:var(--brand-600);color:#fff;font-size:10.5px;border-radius:99px;padding:1px 7px}
+.main{flex:1;background:var(--ink-50);display:flex;flex-direction:column}
+.mhead{padding:16px 22px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--ink-200);background:#fff}
+.cols{flex:1;display:grid;grid-template-columns:1.25fr 1fr;gap:18px;padding:18px 22px;overflow:hidden}
+.feed{display:flex;flex-direction:column;gap:10px}
+.pcard{background:#fff;border-radius:16px;padding:14px;box-shadow:var(--shadow-card),inset 0 0 0 1px var(--ink-200);display:flex;gap:14px;align-items:center}
+.pcard.new{box-shadow:0 0 0 2px var(--brand-500),var(--shadow-lift);animation:pop .5s var(--ease)}
+@keyframes pop{from{transform:translateY(-8px);opacity:0}}
+.pcard .amt{font-size:22px;font-weight:900;letter-spacing:-.02em}
+.pcard .meta{font-size:12px;color:var(--ink-500);margin-top:2px}
+.pcard .pc{white-space:nowrap;font-size:20px;font-weight:900;letter-spacing:.12em;background:var(--ink-100);border-radius:10px;padding:6px 10px}
+.mini{height:38px;padding:0 14px;border-radius:11px;font-weight:700;font-size:13px}
+.mini.ok{background:var(--save);color:#fff}.mini.no{box-shadow:inset 0 0 0 1px var(--ink-300);background:#fff}
+.verified{font-size:12px;font-weight:700;color:var(--save);display:flex;align-items:center;gap:6px}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kpi{background:#fff;border-radius:16px;padding:14px;box-shadow:inset 0 0 0 1px var(--ink-200)}
+.kpi small{font-size:11px;font-weight:700;color:var(--ink-400);text-transform:uppercase;letter-spacing:.05em}.kpi b{display:block;font-size:24px;font-weight:900;margin-top:4px;letter-spacing:-.02em}
+.kpi .d{font-size:11.5px;color:var(--save);font-weight:700}
+.tl{background:#fff;border-radius:16px;padding:14px;box-shadow:inset 0 0 0 1px var(--ink-200);margin-top:10px}
+.tlrow{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--ink-100);font-size:13px}
+.tlrow:last-child{border:0}
+.tlrow .t{width:52px;font-weight:800}
+.tag{font-size:10.5px;font-weight:800;border-radius:7px;padding:3px 7px;margin-left:auto}
+.tag.c{background:var(--save-50);color:var(--save)}.tag.p{background:#fef3c7;color:#b45309}.tag.s{background:var(--ink-100);color:var(--ink-600)}
+
+.principles{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:40px}
+.pr{background:#fff;border-radius:18px;padding:18px;box-shadow:var(--shadow-card),inset 0 0 0 1px var(--ink-200)}
+.pr b{font-size:14.5px}.pr p{font-size:13px;color:var(--ink-500);margin-top:6px;line-height:1.55}
+.pr .k{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--brand-50);color:var(--brand-600);margin-bottom:10px}
+@media (max-width:640px){.board{margin-top:-20px}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1Z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z"/><circle cx="7" cy="7" r="1.5"/></symbol>
+  <symbol id="i-del" viewBox="0 0 24 24"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/><path d="m18 9-6 6M12 9l6 6"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 17h4v4"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9Z"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></symbol>
+</svg>
+
+<header class="intro">
+  <div class="wrap">
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <span class="wordmark">tix<i>it</i></span>
+      <span class="pill">Dine-in · design concept v1 · dinein.tixit.in</span>
+    </div>
+    <h1>Book the table. Pay the bill. <span class="grad">Keep the savings.</span></h1>
+    <p>Seven key screens for Tixit Dine-in. It's the same brand, tokens and type as www.tixit.in, with the dark rose-glow hero used as the evening surface. The screens are interactive: tap slots, type a bill amount on the keypad and verify the pass.</p>
+    <div class="legend">
+      <span class="sw"><b style="background:#e11d48"></b>brand-600 · action</span>
+      <span class="sw"><b style="background:#020617"></b>ink-950 · night surface</span>
+      <span class="sw"><b style="background:#059669"></b>save · every discount</span>
+      <span class="sw"><b style="background:#f8fafc"></b>ink-50 · content</span>
+      <span class="sw"><b style="background:#7c3aed"></b>violet glow · ambience only</span>
+    </div>
+  </div>
+</header>
+
+<main class="board">
+  <div class="rail">
+
+    <!-- 1. HOME -->
+    <section class="shot">
+      <div class="phone"><div class="screen">
+        <div class="night" style="flex:0 0 auto;padding-bottom:18px">
+          <div class="island"></div>
+          <div class="status dark"><span>7:12</span><span>●●● ▮</span></div>
+          <div style="padding:6px 16px 0;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div class="eyebrow" style="color:var(--brand-400)">Dining in</div>
+              <div style="display:flex;align-items:center;gap:4px;font-weight:800;font-size:16px;margin-top:2px"><svg class="ico s"><use href="#i-pin"/></svg>C-Scheme<svg class="ico s"><use href="#i-down"/></svg></div>
+            </div>
+            <div class="switch glass"><span>Events</span><span class="on">Dine-in</span></div>
+          </div>
+          <h2 style="padding:16px 16px 0;font-size:26px;line-height:1.15;font-weight:800;letter-spacing:-.025em">Where are we<br/><span class="grad">eating tonight?</span></h2>
+          <div style="margin:14px 16px 0;display:flex;align-items:center;gap:10px;background:#fff;color:var(--ink-400);border-radius:14px;padding:13px 14px;font-size:14px;box-shadow:var(--shadow-lift)">
+            <svg class="ico" style="color:var(--ink-400)"><use href="#i-search"/></svg>Restaurants, cuisines, dishes
+          </div>
+          <div class="hscroll" style="padding:12px 16px 0">
+            <span class="chip glass" style="color:#fff"><svg class="ico s"><use href="#i-bolt"/></svg>Tonight</span>
+            <span class="chip glass" style="color:#fff"><svg class="ico s"><use href="#i-receipt"/></svg>Pay bill</span>
+            <span class="chip glass" style="color:#fff">Rooftop</span>
+            <span class="chip glass" style="color:#fff">Date night</span>
+            <span class="chip glass" style="color:#fff">Pure veg</span>
+          </div>
+        </div>
+        <div class="scroll">
+          <div class="sec"><h4>Tonight near you</h4><a href="#">See all</a></div>
+          <div style="padding:10px 16px 0">
+            <article class="rcard">
+              <div class="img a"><span class="badge-save"><svg class="ico s"><use href="#i-tag"/></svg>Flat 30% off</span><span class="fav glass" style="color:#fff"><svg class="ico s"><use href="#i-heart"/></svg></span>
+                <div class="title"><b>Ember &amp; Oak</b><small>Modern Indian · ₹1,800 for two · 1.2 km</small></div></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px 0;font-size:12px;color:var(--ink-500)"><span class="rating">4.6 <svg class="ico s" style="width:11px;height:11px;fill:#fff;stroke:none"><use href="#i-star"/></svg></span><span>Next tables tonight</span></div>
+              <div class="slots"><div class="slot hot">7:30<small>30% off</small></div><div class="slot hot">8:00<small>30% off</small></div><div class="slot">9:30<small>15% off</small></div></div>
+            </article>
+          </div>
+          <div class="sec"><h4>Collections</h4><a href="#">Explore</a></div>
+          <div class="hscroll" style="padding:10px 16px 18px">
+            <div class="img c" style="flex:0 0 150px;height:110px;border-radius:16px;display:flex;align-items:flex-end;padding:10px;color:#fff;font-weight:800;font-size:14px;line-height:1.2">Rooftops of<br/>C-Scheme</div>
+            <div class="img b" style="flex:0 0 150px;height:110px;border-radius:16px;display:flex;align-items:flex-end;padding:10px;color:#fff;font-weight:800;font-size:14px;line-height:1.2">Date-night<br/>tables</div>
+          </div>
+        </div>
+        <nav class="tabbar">
+          <div class="on"><svg class="ico"><use href="#i-home"/></svg>Explore</div>
+          <div><svg class="ico"><use href="#i-cal"/></svg>Bookings</div>
+          <div><svg class="ico"><use href="#i-qr"/></svg>Pay bill</div>
+          <div><svg class="ico"><use href="#i-user"/></svg>Account</div>
+        </nav>
+      </div></div>
+      <div class="cap"><h3><span class="n">1</span>Home: intent first</h3><p>The dark Tixit hero sets the evening mood. The Events / Dine-in switch tells users it's one account. Cards show the next three bookable slots, so a table is two taps away.</p></div>
+    </section>
+
+    <!-- 2. RESTAURANT -->
+    <section class="shot">
+      <div class="phone"><div class="screen">
+        <div class="scroll">
+          <div class="hero-img img d">
+            <div class="island"></div>
+            <div class="status dark"><span>7:14</span><span>●●● ▮</span></div>
+            <div class="topbar" style="top:46px"><span class="round glass"><svg class="ico"><use href="#i-back"/></svg></span><span style="display:flex;gap:8px"><span class="round glass"><svg class="ico s"><use href="#i-share"/></svg></span><span class="round glass"><svg class="ico s"><use href="#i-heart"/></svg></span></span></div>
+            <div class="dots"><i class="on"></i><i></i><i></i><i></i></div>
+          </div>
+          <div class="sheet-top">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+              <div><h2 style="font-size:24px;font-weight:900;letter-spacing:-.025em">Ember &amp; Oak</h2>
+                <p style="font-size:13px;color:var(--ink-500);margin-top:3px">Modern Indian · Bar · C-Scheme</p></div>
+              <div style="text-align:center"><span class="rating" style="font-size:14px;padding:5px 9px">4.6 ★</span><div style="font-size:10.5px;color:var(--ink-400);margin-top:3px">2.1k verified</div></div>
+            </div>
+            <div class="offers">
+              <div class="offer best"><span class="eyebrow" style="color:var(--save)">Pre-book</span><b>30% off</b><span>Mon–Thu, all day<br/>Fri–Sun before 8 PM</span></div>
+              <div class="offer"><span class="eyebrow" style="color:var(--ink-400)">Walk-in · Pay bill</span><b>15% off</b><span>Every day<br/>Excludes alcohol</span></div>
+            </div>
+            <div class="lbl" style="margin-top:18px"><span>PICK A DAY</span><span style="color:var(--save)">Deepest offers highlighted</span></div>
+            <div class="daystrip"><div class="day on"><small>Today</small><b>19</b></div><div class="day"><small>Fri</small><b>20</b></div><div class="day"><small>Sat</small><b>21</b></div><div class="day"><small>Sun</small><b>22</b></div><div class="day"><small>Mon</small><b>23</b></div></div>
+            <div class="facts">
+              <div class="fact"><small>For two</small><b>₹1,800</b></div>
+              <div class="fact"><small>Open</small><b>till 1 AM</b></div>
+              <div class="fact"><small>Distance</small><b>1.2 km</b></div>
+            </div>
+            <div style="height:16px"></div>
+          </div>
+        </div>
+        <div class="dock"><button class="btn dark press" style="flex:1"><svg class="ico s"><use href="#i-receipt"/></svg>Pay bill</button><button class="btn primary press" style="flex:1.4">Book a table</button></div>
+      </div></div>
+      <div class="cap"><h3><span class="n">2</span>Restaurant: offers in plain words</h3><p>Pre-book and walk-in offers sit side by side, with validity and exclusions shown up front. The dock keeps both main actions in thumb reach throughout.</p></div>
+    </section>
+
+    <!-- 3. BOOKING SHEET -->
+    <section class="shot">
+      <div class="phone"><div class="screen">
+        <div class="hero-img img d" style="height:100%"><div class="island"></div><div class="status dark"><span>7:15</span><span>●●● ▮</span></div></div>
+        <div class="scrim"></div>
+        <div class="bsheet" id="booking">
+          <div class="grab"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:18px;letter-spacing:-.01em">Book a table</b><span class="badge-save soft">Up to 30% off</span></div>
+          <div class="lbl"><span>GUESTS</span></div>
+          <div class="stepper"><button class="press" data-step="-1">−</button><div class="v"><b class="num" id="guests">4</b><small>guests</small></div><button class="press" data-step="1">+</button></div>
+          <div class="lbl"><span>TODAY · THU 19 NOV</span><span style="color:var(--ink-400)">Change</span></div>
+          <div class="sgrid" id="slots">
+            <button class="sg off" disabled>7:00<small>Full</small></button>
+            <button class="sg press" data-t="7:30 PM" data-o="30">7:30<small>30% off</small></button>
+            <button class="sg press sel" data-t="8:00 PM" data-o="30">8:00<small>30% off</small></button>
+            <button class="sg press" data-t="8:30 PM" data-o="20">8:30<small>20% off</small></button>
+            <button class="sg press" data-t="9:00 PM" data-o="15">9:00<small>15% off</small></button>
+            <button class="sg press" data-t="9:30 PM" data-o="15">9:30<small>15% off</small></button>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px" class="hscroll">
+            <span class="chip light">🎂 Birthday</span><span class="chip light">💍 Anniversary</span><span class="chip light">Window seat</span>
+          </div>
+          <p style="font-size:11.5px;color:var(--ink-500);margin:14px 2px 10px;display:flex;gap:6px;align-items:center"><svg class="ico s" style="color:var(--save)"><use href="#i-shield"/></svg>Free booking · Cancel any time before your slot</p>
+          <button class="btn primary full press" id="confirm">Confirm · 8:00 PM · 4 guests · 30% off</button>
+        </div>
+      </div></div>
+      <div class="cap"><h3><span class="n">3</span>Booking sheet: one sheet, one decision</h3><p>Guests, then day, then slot, with the offer printed on each slot. The confirm button repeats the full choice back, so nobody books the wrong time.</p></div>
+    </section>
+
+    <!-- 4. PAY BILL -->
+    <section class="shot">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+        <div class="payhead"><svg class="ico"><use href="#i-back"/></svg><span class="logo img e"></span><div><b style="font-size:15px">Ember &amp; Oak</b><div style="font-size:11.5px;color:var(--save);font-weight:700">15% off on bill · walk-in</div></div></div>
+        <div class="amount"><small>Enter your bill amount</small><div class="big num"><span class="cur">₹</span><span id="amt">2,000</span><span class="caret"></span></div></div>
+        <div class="toggle-row"><div><b>Includes items not on offer?</b><small>e.g. alcohol: we won't discount it</small></div><span class="tg" data-tg></span></div>
+        <div class="toggle-row"><div><b>Add service charge</b><small>Optional · never discounted</small></div><span class="tg" data-tg></span></div>
+        <div class="savebar"><span>You save <b class="num" id="save1">₹300</b></span><span>You pay <b class="num" id="pay1">₹1,710</b></span></div>
+        <div class="keypad" id="keypad">
+          <button class="key press">1</button><button class="key press">2</button><button class="key press">3</button>
+          <button class="key press">4</button><button class="key press">5</button><button class="key press">6</button>
+          <button class="key press">7</button><button class="key press">8</button><button class="key press">9</button>
+          <button class="key press" style="font-size:15px">00</button><button class="key press">0</button><button class="key press" data-del style="display:grid;place-items:center"><svg class="ico"><use href="#i-del"/></svg></button>
+        </div>
+        <div style="padding:10px 14px 20px"><button class="btn primary full press">Review bill</button></div>
+      </div></div>
+      <div class="cap"><h3><span class="n">4</span>Pay bill: an honest keypad</h3><p>A custom keypad stops the OS keyboard hiding the savings. Non-discountable items and an opt-out service charge are separate, so the legal requirement is also a trust feature.</p></div>
+    </section>
+
+    <!-- 5. RECEIPT -->
+    <section class="shot">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="status"><span>9:42</span><span>●●● ▮</span></div>
+        <div class="payhead"><svg class="ico"><use href="#i-back"/></svg><b style="font-size:16px">Review &amp; pay</b></div>
+        <div class="scroll">
+          <div class="receipt">
+            <div class="rhead"><span class="logo img e"></span><div><b>Ember &amp; Oak</b><div style="font-size:12px;color:var(--ink-500)">Thu 19 Nov · Table for 4</div></div></div>
+            <div class="perf"><i></i></div>
+            <div class="lines num">
+              <div class="line"><span>Bill total</span><span id="r-bill">₹2,000.00</span></div>
+              <div class="line save"><span>Restaurant offer · 15%<span class="who">Paid by Ember &amp; Oak</span></span><span id="r-rest">−₹300.00</span></div>
+              <div class="line save"><span>TIXITDINE coupon<span class="who">Paid by Tixit</span></span><span>−₹100.00</span></div>
+              <div class="line muted"><span>Platform fee (incl. GST)</span><span>₹10.00</span></div>
+              <div class="line total"><span>You pay</span><span id="r-pay">₹1,610.00</span></div>
+            </div>
+          </div>
+          <div class="coupon"><svg class="ico s" style="color:var(--save)"><use href="#i-check"/></svg><span style="flex:1"><b>TIXITDINE</b> applied · ₹100 off</span><span style="color:var(--ink-400);font-size:12px">Change</span></div>
+          <div class="coupon"><svg class="ico s" style="color:var(--ink-500)"><use href="#i-wallet"/></svg><span style="flex:1">Bank offers on cards</span><span style="color:var(--brand-600);font-size:12px;font-weight:700">2 available</span></div>
+          <div style="margin:14px 16px 0;border-radius:16px;padding:14px;background:var(--ink-900);color:#fff;display:flex;justify-content:space-between;align-items:center">
+            <div><div class="eyebrow" style="color:#6ee7b7">Total savings</div><b class="num" style="font-size:24px;letter-spacing:-.02em" id="r-save">₹400</b></div>
+            <div style="font-size:11.5px;color:var(--ink-300);text-align:right;max-width:150px">Shown before you pay. No surprises after.</div>
+          </div>
+        </div>
+        <div class="dock" style="flex-direction:column;gap:6px"><button class="btn primary full press" id="r-btn">Pay ₹1,610 via UPI</button><div class="secure"><svg class="ico s"><use href="#i-shield"/></svg>Secured by Razorpay · UPI · Cards · Netbanking</div></div>
+      </div></div>
+      <div class="cap"><h3><span class="n">5</span>Receipt: the Tixit ticket, reused</h3><p>The perforated card is the same component as event tickets. Each discount line says who pays for it, and the total saving is shown before payment.</p></div>
+    </section>
+
+    <!-- 6. PASS -->
+    <section class="shot">
+      <div class="phone"><div class="screen night">
+        <div class="sweep"></div>
+        <div class="island"></div>
+        <div class="status dark"><span id="clk-s">9:43</span><span>●●● ▮</span></div>
+        <div class="pass flip">
+          <div class="eyebrow" style="color:var(--brand-400)">Payment successful</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px"><span class="logo img e" style="width:28px;height:28px;border-radius:8px"></span><b>Ember &amp; Oak</b></div>
+          <div class="num" style="font-size:46px;font-weight:900;letter-spacing:-.035em;margin-top:6px">₹1,610</div>
+          <div style="font-size:12.5px;color:var(--ink-300)">You saved <b style="color:#6ee7b7">₹400</b> · BIL-8K2M4Q</div>
+          <div class="card3d" id="card3d">
+            <div class="face">
+              <div class="ring">
+                <svg viewBox="0 0 212 212"><circle cx="106" cy="106" r="96" stroke="rgb(255 255 255/.1)" stroke-width="8" fill="none"/><circle id="arc" cx="106" cy="106" r="96" stroke="url(#g)" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="603" stroke-dashoffset="0"/><defs><linearGradient id="g"><stop offset="0" stop-color="#fb7185"/><stop offset="1" stop-color="#e11d48"/></linearGradient></defs></svg>
+                <div class="code"><small>Verification code</small><b class="num" id="code">482 913</b><small id="secs">changes in 30s</small></div>
+              </div>
+            </div>
+            <div class="back face"><div class="okmark"><svg class="ico" style="width:46px;height:46px;stroke:#fff;stroke-width:3"><use href="#i-check"/></svg></div><b style="margin-top:22px;font-size:20px">Verified by staff</b><span style="font-size:12.5px;color:var(--ink-300);margin-top:4px">Enjoy your evening ✦</span></div>
+          </div>
+          <div class="clock"><span class="live"></span><span class="num" id="clk">21:43:07</span>· live</div>
+          <p style="font-size:12.5px;color:var(--ink-300);margin-top:auto;line-height:1.5">Show this screen to the staff.<br/>The code and clock change live, so a screenshot won't work.</p>
+          <button class="btn full press glass" style="margin-top:14px;color:#fff" id="verify">Simulate: staff taps “Matches”</button>
+        </div>
+      </div></div>
+      <div class="cap"><h3><span class="n">6</span>Verification pass: hard to fake</h3><p>A TOTP-style code rotates every 30 s, a live clock ticks in seconds and a slow gradient sweeps the screen. When staff confirm, the pass flips to a green verified state.</p></div>
+    </section>
+
+    <!-- 7. PARTNER LIVE -->
+    <section class="shot">
+      <div class="desk">
+        <aside class="side">
+          <span class="wordmark" style="font-size:22px">tix<i>it</i></span><div style="font-size:11px;color:var(--ink-400);font-weight:700;margin-top:2px">PARTNER · EMBER &amp; OAK</div>
+          <div class="nav">
+            <div class="on"><svg class="ico s"><use href="#i-bolt"/></svg>Live<span class="cnt">2</span></div>
+            <div><svg class="ico s"><use href="#i-cal"/></svg>Reservations</div>
+            <div><svg class="ico s"><use href="#i-tag"/></svg>Offers</div>
+            <div><svg class="ico s"><use href="#i-users"/></svg>Availability</div>
+            <div><svg class="ico s"><use href="#i-wallet"/></svg>Payouts</div>
+            <div><svg class="ico s"><use href="#i-chart"/></svg>Insights</div>
+          </div>
+        </aside>
+        <div class="main">
+          <div class="mhead"><div><b style="font-size:18px;letter-spacing:-.01em">Live</b><div style="font-size:12px;color:var(--ink-500)">Payments and arrivals, as they happen</div></div><span class="verified"><span class="live"></span>Connected</span></div>
+          <div class="cols">
+            <div class="feed" id="feed">
+              <div class="pcard new" id="pc1">
+                <div style="flex:1"><div class="amt num">₹1,610</div><div class="meta">Bill ₹2,000 · Table 12 · ••••4821 · just now</div></div>
+                <div class="pc num" id="pcode">482 913</div>
+                <div style="display:flex;gap:6px" id="pact"><button class="mini no press">Mismatch</button><button class="mini ok press" id="pok">Matches</button></div>
+              </div>
+              <div class="pcard"><div style="flex:1"><div class="amt num">₹3,240</div><div class="meta">Bill ₹4,050 · Table 4 · ••••1093 · 4 min ago</div></div><span class="verified"><svg class="ico s"><use href="#i-check"/></svg>Verified</span></div>
+              <div class="pcard"><div style="flex:1"><div class="amt num">₹890</div><div class="meta">Bill ₹1,100 · Bar · ••••7720 · 18 min ago</div></div><span class="verified"><svg class="ico s"><use href="#i-check"/></svg>Verified</span></div>
+            </div>
+            <div>
+              <div class="kpis">
+                <div class="kpi"><small>Covers tonight</small><b class="num">86</b><span class="d">▲ 22% vs last Thu</span></div>
+                <div class="kpi"><small>Tixit sales</small><b class="num">₹48.2k</b><span class="d">Payout Mon · ₹44.1k</span></div>
+              </div>
+              <div class="tl">
+                <div class="eyebrow" style="color:var(--ink-400);margin-bottom:4px">Next arrivals</div>
+                <div class="tlrow"><span class="t num">8:00</span>Ananya · 4 guests · 🎂<span class="tag c">Confirmed</span></div>
+                <div class="tlrow"><span class="t num">8:30</span>Rohit · 2 guests<span class="tag p">Accept?</span></div>
+                <div class="tlrow"><span class="t num">9:00</span>Meera · 6 guests · Window<span class="tag c">Confirmed</span></div>
+                <div class="tlrow"><span class="t num">7:30</span>Kabir · 2 guests<span class="tag s">Seated</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cap" style="max-width:600px"><h3><span class="n">7</span>Partner console: one-tap verification</h3><p>New payments arrive in real time with a soft chime and pulse. Staff match the code on the diner's pass and tap Matches. The same dashboard shell as the Tixit organizer console is used, so it's one design system.</p></div>
+    </section>
+  </div>
+
+  <div class="principles">
+    <div class="pr"><div class="k"><svg class="ico s"><use href="#i-tag"/></svg></div><b>Money must be obvious</b><p>Every discount is emerald, every line names who funds it, and fees are shown before the pay button, never after.</p></div>
+    <div class="pr"><div class="k"><svg class="ico s"><use href="#i-bolt"/></svg></div><b>One thumb, one hand</b><p>Main actions live in a bottom dock. Booking and filters open as sheets that close with Back, not as new pages.</p></div>
+    <div class="pr"><div class="k"><svg class="ico s"><use href="#i-receipt"/></svg></div><b>One family</b><p>Ticket perforation, rose glow, ink scale and press feedback are shared with Events through @tixit/ui.</p></div>
+    <div class="pr"><div class="k"><svg class="ico s"><use href="#i-shield"/></svg></div><b>Calm and accessible</b><p>Tabular numbers, AA contrast on both surfaces, 44 px targets and reduced-motion respected.</p></div>
+  </div>
+</main>
+
+<script>
+(() => {
+  const inr = (n, d = 0) => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+  /* booking sheet */
+  let guests = 4, slot = { t: '8:00 PM', o: 30 };
+  const confirm = document.getElementById('confirm');
+  const renderConfirm = () => confirm.textContent = `Confirm · ${slot.t} · ${guests} guests · ${slot.o}% off`;
+  document.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => {
+    guests = Math.min(12, Math.max(1, guests + Number(b.dataset.step)));
+    document.getElementById('guests').textContent = guests; renderConfirm();
+  }));
+  document.querySelectorAll('#slots .sg:not(.off)').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('#slots .sg').forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel'); slot = { t: b.dataset.t, o: b.dataset.o }; renderConfirm();
+  }));
+
+  /* toggles */
+  document.querySelectorAll('[data-tg]').forEach(t => t.addEventListener('click', () => t.classList.toggle('on')));
+
+  /* keypad + pricing preview */
+  let digits = '2000';
+  const render = () => {
+    const bill = Number(digits || 0);
+    const rest = Math.round(bill * 0.15);
+    const coupon = bill >= 1000 ? 100 : 0;
+    const fee = bill ? 10 : 0;
+    const pay = Math.max(0, bill - rest - coupon + fee);
+    document.getElementById('amt').textContent = bill.toLocaleString('en-IN');
+    document.getElementById('save1').textContent = inr(rest);
+    document.getElementById('pay1').textContent = inr(Math.max(0, bill - rest + fee));
+    document.getElementById('r-bill').textContent = inr(bill, 2);
+    document.getElementById('r-rest').textContent = '−' + inr(rest, 2);
+    document.getElementById('r-pay').textContent = inr(pay, 2);
+    document.getElementById('r-save').textContent = inr(rest + coupon);
+    document.getElementById('r-btn').textContent = `Pay ${inr(pay)} via UPI`;
+  };
+  document.querySelectorAll('#keypad .key').forEach(k => k.addEventListener('click', () => {
+    if (k.hasAttribute('data-del')) digits = digits.slice(0, -1);
+    else if ((digits + k.textContent).length <= 6) digits = (digits + k.textContent).replace(/^0+/, '');
+    render();
+  }));
+  render();
+
+  /* verification pass: rotating code + ring + live clock */
+  const arc = document.getElementById('arc'), codeEl = document.getElementById('code'), secs = document.getElementById('secs');
+  const pcode = document.getElementById('pcode');
+  const mkCode = step => { let x = (step * 2654435761) >>> 0; const s = String(x % 1000000).padStart(6, '0'); return s.slice(0, 3) + ' ' + s.slice(3); };
+  const tick = () => {
+    const now = new Date(), step = Math.floor(now / 30000), left = 30 - (Math.floor(now / 1000) % 30);
+    const c = mkCode(step); codeEl.textContent = c; pcode.textContent = c;
+    secs.textContent = `changes in ${left}s`;
+    arc.style.strokeDashoffset = String(603 * (1 - left / 30));
+    document.getElementById('clk').textContent = now.toLocaleTimeString('en-GB');
+    document.getElementById('clk-s').textContent = now.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }).replace(/\s?[ap]m/i, '');
+  };
+  arc.style.transition = 'stroke-dashoffset 1s linear';
+  tick(); setInterval(tick, 1000);
+
+  const markVerified = () => {
+    document.getElementById('card3d').classList.add('done');
+    const pc = document.getElementById('pc1'); pc.classList.remove('new');
+    document.getElementById('pact').outerHTML = '<span class="verified"><svg class="ico s"><use href="#i-check"/></svg>Verified</span>';
+    document.getElementById('verify').textContent = 'Verified ✓';
+  };
+  document.getElementById('verify').addEventListener('click', markVerified);
+  document.getElementById('pok').addEventListener('click', markVerified);
+})();
+</script>
+</body>
+</html>
