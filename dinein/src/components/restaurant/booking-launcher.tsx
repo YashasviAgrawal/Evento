@@ -8,7 +8,15 @@ import { BookingPanel } from '@/components/booking/booking-panel';
 import { Sheet } from '@/components/ui/sheet';
 
 interface Props {
-  restaurant: { slug: string; name: string; lat: number; lng: number; bookingEnabled: boolean; payBillEnabled: boolean };
+  restaurant: {
+    slug: string;
+    name: string;
+    lat: number;
+    lng: number;
+    bookingEnabled: boolean;
+    payBillEnabled: boolean;
+    coverChargePerGuestPaise?: number;
+  };
   bestOfferLabel: string | null;
 }
 

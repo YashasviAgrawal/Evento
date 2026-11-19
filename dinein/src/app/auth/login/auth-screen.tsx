@@ -10,7 +10,7 @@ import { safeNext } from '@/lib/urls';
 import { Spinner } from '@/components/ui/feedback';
 import { Wordmark } from '@/components/shell/site-header';
 
-type Mode = 'password' | 'code' | 'signup';
+type Mode = 'password' | 'code' | 'phone' | 'signup';
 type Stage = 'form' | 'verify';
 
 const REASONS: Record<string, string> = {
@@ -28,7 +28,7 @@ export function AuthScreen() {
   const params = useSearchParams();
   const next = safeNext(params.get('next'), '/');
   const reason = REASONS[params.get('reason') ?? ''];
-  const { user, loading, signIn, signInWithOtp, signInWithGoogle, register, verifyEmail } = useAuth();
+  const { user, loading, signIn, signInWithOtp, signInWithPhoneOtp, signInWithGoogle, register, verifyEmail } = useAuth();
 
   const [mode, setMode] = useState<Mode>('password');
   const [stage, setStage] = useState<Stage>('form');
@@ -53,7 +53,9 @@ export function AuthScreen() {
     try {
       await task();
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'EMAIL_NOT_REGISTERED') {
+      if (err instanceof ApiError && err.code === 'PHONE_NOT_REGISTERED') {
+        setError(err.message);
+      } else if (err instanceof ApiError && err.code === 'EMAIL_NOT_REGISTERED') {
         setMode('signup');
         setError('No Tixit account uses that email yet — create one below.');
       } else {
@@ -69,6 +71,7 @@ export function AuthScreen() {
     if (stage === 'verify') {
       void run(async () => {
         if (mode === 'signup') await verifyEmail(email, code, 'signup');
+        else if (mode === 'phone') await signInWithPhoneOtp(phone, code);
         else await signInWithOtp(email, code);
         router.replace(next);
       });
@@ -78,6 +81,12 @@ export function AuthScreen() {
       void run(async () => {
         await signIn(email, password);
         router.replace(next);
+      });
+    } else if (mode === 'phone') {
+      void run(async () => {
+        const { data } = await api.post<{ devOtp?: string }>('/auth/phone/otp/request', { phone });
+        setDevCode(data.devOtp ?? null);
+        setStage('verify');
       });
     } else if (mode === 'code') {
       void run(async () => {
@@ -150,9 +159,9 @@ export function AuthScreen() {
               <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-600">
                 <Mail className="h-7 w-7" />
               </span>
-              <h1 className="mt-5 text-2xl font-extrabold tracking-tight">Check your inbox</h1>
+              <h1 className="mt-5 text-2xl font-extrabold tracking-tight">{mode === 'phone' ? 'Check your messages' : 'Check your inbox'}</h1>
               <p className="mt-1.5 text-sm text-ink-500">
-                We sent a 6-digit code to <b className="text-ink-800">{email}</b>.
+                We sent a 6-digit code to <b className="text-ink-800">{mode === 'phone' ? phone : email}</b>.
               </p>
             </>
           ) : (
@@ -185,12 +194,13 @@ export function AuthScreen() {
                 />
               </div>
 
-              <div className="mt-5 grid grid-cols-3 rounded-2xl bg-ink-100 p-1 text-[13px] font-bold" role="tablist">
+              <div className="mt-5 grid grid-cols-4 rounded-2xl bg-ink-100 p-1 text-[13px] font-bold" role="tablist">
                 {(
                   [
                     ['password', 'Password'],
+                    ['phone', 'Phone'],
                     ['code', 'Email code'],
-                    ['signup', 'New account'],
+                    ['signup', 'Sign up'],
                   ] as const
                 ).map(([value, label]) => (
                   <button
@@ -233,6 +243,25 @@ export function AuthScreen() {
                     <input id="name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="input" autoComplete="name" required />
                   </div>
                 )}
+                {mode === 'phone' ? (
+                  <div>
+                    <label htmlFor="mobile" className="label">Mobile number</label>
+                    <div className="flex items-center gap-2">
+                      <span className="grid h-[50px] shrink-0 place-items-center rounded-xl bg-ink-100 px-3 text-sm font-bold text-ink-600">+91</span>
+                      <input
+                        id="mobile"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, '').slice(0, 10))}
+                        className="input"
+                        autoComplete="tel-national"
+                        inputMode="numeric"
+                        placeholder="98765 43210"
+                        required
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-ink-400">For accounts with this number on file. We’ll text you a code.</p>
+                  </div>
+                ) : (
                 <div>
                   <label htmlFor="email" className="label">Email</label>
                   <input
@@ -246,6 +275,7 @@ export function AuthScreen() {
                     required
                   />
                 </div>
+                )}
                 {mode === 'signup' && (
                   <div>
                     <label htmlFor="phone" className="label">
@@ -254,7 +284,7 @@ export function AuthScreen() {
                     <input id="phone" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, '').slice(0, 13))} className="input" autoComplete="tel" inputMode="tel" />
                   </div>
                 )}
-                {mode !== 'code' && (
+                {(mode === 'password' || mode === 'signup') && (
                   <div>
                     <label htmlFor="password" className="label">Password</label>
                     <div className="relative">
@@ -302,6 +332,8 @@ export function AuthScreen() {
                 'Sign in'
               ) : mode === 'code' ? (
                 'Email me a code'
+              ) : mode === 'phone' ? (
+                'Text me a code'
               ) : (
                 'Create account'
               )}
@@ -309,7 +341,7 @@ export function AuthScreen() {
 
             {stage === 'verify' && (
               <button type="button" onClick={() => setStage('form')} className="w-full text-center text-sm font-semibold text-ink-500">
-                Use a different email
+                {mode === 'phone' ? 'Use a different number' : 'Use a different email'}
               </button>
             )}
           </form>

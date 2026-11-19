@@ -122,10 +122,12 @@ export async function accrueCashback(
   input: { userId: string; billId: string; eligiblePaise: number },
 ): Promise<number> {
   const settings = await getSettings(client);
-  const amount = Math.min(
+  // Whole rupees, rounded down: "₹82 cashback" reads better than "₹82.37".
+  const raw = Math.min(
     Number(settings.dining_cashback_max_paise),
     Math.round((Math.max(0, input.eligiblePaise) * Number(settings.dining_cashback_percent)) / 100),
   );
+  const amount = Math.floor(raw / 100) * 100;
   if (amount <= 0) return 0;
   await client.query(
     `INSERT INTO finance.wallet_credits (user_id, source_type, source_id, amount_paise, remaining_paise, status, available_at, expires_at)

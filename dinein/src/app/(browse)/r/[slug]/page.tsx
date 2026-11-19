@@ -70,6 +70,7 @@ export default async function RestaurantPage({ params }: Props) {
       lng: restaurant.lng,
       bookingEnabled: restaurant.bookingEnabled,
       payBillEnabled: restaurant.payBillEnabled,
+      coverChargePerGuestPaise: restaurant.coverChargePerGuestPaise ?? 0,
     },
     bestOfferLabel: prebook[0] ? (prebook[0].kind === 'percent' ? `${prebook[0].percentOff}% off` : `${rupees(prebook[0].flatOffPaise ?? 0)} off`) : null,
   };

@@ -5,7 +5,8 @@ import { Photo } from '@/components/ui/photo';
 const FUNDER: Record<string, string> = {
   restaurant: 'Paid by the restaurant',
   platform: 'Paid by Tixit',
-  shared: 'Shared by the restaurant and Tixit',
+  bank: 'Paid by the bank',
+  shared: 'Shared by the restaurant and a partner',
 };
 
 /**

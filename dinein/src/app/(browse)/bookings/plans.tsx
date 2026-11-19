@@ -10,9 +10,10 @@ import { cn, dateTime, relativeDay, rupees, timeOnly } from '@/lib/format';
 import { Photo } from '@/components/ui/photo';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 
-const LIVE = ['placed', 'confirmed', 'seated'];
+const LIVE = ['pending_payment', 'placed', 'confirmed', 'seated'];
 
 export const STATUS_LABEL: Record<string, { text: string; tone: string }> = {
+  pending_payment: { text: 'Deposit due', tone: 'bg-amber-50 text-amber-700' },
   placed: { text: 'Awaiting confirmation', tone: 'bg-amber-50 text-amber-700' },
   confirmed: { text: 'Confirmed', tone: 'bg-save-50 text-save-700' },
   seated: { text: 'Seated', tone: 'bg-save-50 text-save-700' },

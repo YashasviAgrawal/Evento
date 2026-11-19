@@ -113,6 +113,13 @@ product and engineering plan is in [`docs/dinein/PLAN.md`](docs/dinein/PLAN.md).
 | Restaurants by status, onboarding sheet (starts in review with default hours) | `/admin` |
 | Go live / pause / delist, commercials, staff by Tixit email, payouts posted to the ledger | `/admin/[id]` |
 
+**Also built:** a **Tixit Wallet** of cashback (earned on bills, spendable a day after staff verify the
+payment, up to half of any later bill, expiring after 90 days — `/wallet`), **table deposits** some
+restaurants ask for at peak times (credited to the bill; refunded if cancelled 24 h ahead, kept on
+late cancellations and no-shows), **bank offers** funded by a bank on its cards and UPI, **phone
+sign-in** by SMS code, **platform codes & bank offers** admin at `/admin/offers`, and **Razorpay
+Route** payouts to a restaurant's linked account (`RAZORPAY_ROUTE_ENABLED`).
+
 Diners get emails for every booking change (confirmed, request sent, accepted, declined, cancelled),
 a reminder about two hours before their table, and an itemised receipt for each bill paid.
 
@@ -431,8 +438,9 @@ Notes for a real deployment:
 - Set every secret in `.env`; the API refuses to start in production with default JWT/QR secrets.
 - Point `RAZORPAY_WEBHOOK_SECRET` at your Razorpay dashboard webhook and register
   `POST /api/v1/payments/webhook`.
-- Background jobs run in-process. Behind more than one API instance, move them to a single worker
-  or wrap them in an advisory lock so reminders are not sent twice.
+- Background jobs run in-process, each holding a PostgreSQL advisory lock while it runs, and
+  side effects (emails, deposit refunds) go through a transactional outbox claimed with
+  `SKIP LOCKED` — so several API instances can run side by side without double-sending.
 - Rate limiting is in-memory; swap in the Redis store for a multi-instance deployment.
 - **Single sign-on** needs the API on a `tixit.in` subdomain (`api.tixit.in`), `COOKIE_DOMAIN=.tixit.in`,
   both origins in `CORS_ORIGINS`, and both origins on the Google OAuth client. The API warns at start

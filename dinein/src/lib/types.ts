@@ -59,6 +59,8 @@ export interface Offer {
   restaurantFundedPct: number;
   terms: string | null;
   status: 'draft' | 'active' | 'paused' | 'archived';
+  bankName?: string | null;
+  paymentMethods?: string[];
 }
 
 export interface RestaurantDetail extends RestaurantCard {
@@ -70,6 +72,7 @@ export interface RestaurantDetail extends RestaurantCard {
   hours: Record<string, Array<[string, string]>>;
   opensAt: string | null;
   serviceChargePercent: number;
+  coverChargePerGuestPaise: number;
   timezone: string;
   gallery: Array<{ kind: string; url: string; caption: string | null }>;
   offers: Offer[];
@@ -129,6 +132,12 @@ export interface Reservation {
     lng: number;
   };
   canCancel: boolean;
+  deposit: {
+    amountPaise: number;
+    status: 'none' | 'pending' | 'paid' | 'credited' | 'refunded' | 'forfeited';
+    holdExpiresAt: string | null;
+    refundableNow: boolean;
+  } | null;
   createdAt: string;
   acceptedAt: string | null;
   seatedAt: string | null;
@@ -140,7 +149,7 @@ export interface PricingLine {
   key: string;
   label: string;
   amountPaise: number;
-  fundedBy?: 'restaurant' | 'platform' | 'shared';
+  fundedBy?: 'restaurant' | 'platform' | 'bank' | 'shared';
   note?: string;
 }
 
@@ -151,6 +160,10 @@ export interface BillPricing {
   restaurantOffer: { title: string; discountPaise: number } | null;
   coupon: { code: string | null; title: string; discountPaise: number } | null;
   couponError: string | null;
+  bankOffer: { title: string; bankName: string | null; discountPaise: number } | null;
+  bankOfferError: string | null;
+  coverCreditPaise: number;
+  walletUsedPaise: number;
   serviceChargePaise: number;
   tipPaise: number;
   convenienceFeePaise: number;
@@ -159,8 +172,48 @@ export interface BillPricing {
   lines: PricingLine[];
 }
 
+export interface BankOption {
+  id: string;
+  title: string;
+  bankName: string | null;
+  paymentMethods: string[];
+  unavailableReason: string | null;
+}
+
 export interface BillQuote extends BillPricing {
   mode: 'prebook' | 'walkin';
+  bankOptions: BankOption[];
+  walletAvailablePaise: number;
+  coverDepositPaise: number;
+}
+
+export interface Wallet {
+  availablePaise: number;
+  pendingPaise: number;
+  expiringSoonPaise: number;
+  nextExpiry: string | null;
+  lifetimeEarnedPaise: number;
+  activity: Array<{
+    kind: 'cashback' | 'cashback_pending' | 'cashback_reversed' | 'cashback_expired' | 'spent';
+    amountPaise: number;
+    at: string;
+    label: string | null;
+    availableAt: string | null;
+  }>;
+}
+
+export interface DepositCheckout {
+  code: string;
+  orderId: string;
+  amountPaise: number;
+  currency: string;
+  keyId: string | null;
+  mockMode: boolean;
+  mockPaymentId?: string;
+  mockSignature?: string;
+  restaurantName: string;
+  holdExpiresAt: string | null;
+  prefill: { name: string; email: string; contact: string };
 }
 
 export type BillStatus = 'pending_payment' | 'paid' | 'verified' | 'disputed' | 'failed' | 'cancelled' | 'refunded';
@@ -267,7 +320,7 @@ export interface AvailabilityRule {
 }
 
 export interface Availability {
-  settings: { autoAccept: boolean; bookingEnabled: boolean; payBillEnabled: boolean };
+  settings: { autoAccept: boolean; bookingEnabled: boolean; payBillEnabled: boolean; coverChargePerGuestPaise: number };
   rules: AvailabilityRule[];
   closedDates: string[];
 }
@@ -298,8 +351,15 @@ export interface AdminRestaurant {
   serviceChargePercent: number;
   gstin: string | null;
   fssai: string | null;
+  razorpayAccountId: string | null;
+  routePayouts: boolean;
   createdAt: string;
   payableBalancePaise: number;
   lifetime: { bills: number; grossPaise: number; commissionPaise: number };
   members: Array<{ userId: string; fullName: string; email: string; role: 'owner' | 'manager' | 'host' | 'cashier' }>;
+}
+
+export interface AdminOffer extends Offer {
+  redemptions: number;
+  discountGivenPaise: number;
 }

@@ -669,8 +669,14 @@ rules no longer produce stop taking bookings), close-a-date, booking switches, t
 console (onboarding, go-live, commercials, staff, ledger payouts), and dine-in emails — booking
 updates, a two-hour reminder claimed with a guarded UPDATE so it never double-sends, and receipts.
 
-**Not built yet (next):** pg-boss (dine-in adds two light in-process jobs, auto-verify and abandoned
-bills; the existing single-instance note in the README still applies), phone OTP via SMS, Razorpay
-Route transfers (settlements are recorded with a UTR, as event payouts are), cover-charge bookings,
-bank offers, wallet/cashback, and the outbox for
-cross-module events (bill capture posts to the ledger in the same transaction instead).
+**Phase 3, built:** transactional outbox + advisory-locked jobs (multi-instance safe without Redis);
+Tixit Wallet cashback as expiring lots (released only after table verification, clawed back on
+disputes, spend held while a bill is unpaid); table deposits with the 24-hour refund rule and
+forfeiture less commission; bank-funded offers with a bank receivable and instrument checks; phone
+sign-in via MSG91 (console fallback); Razorpay Route payouts with failed-transfer reversal; admin for
+platform codes and bank offers. 94 server tests, every money path asserting a balanced ledger.
+
+**Deliberately still open:** bank offers are checked against the captured payment's instrument
+*after* payment and mismatches are flagged for operations rather than blocked — enforcing it before
+payment needs Razorpay's own Offers product configured per bank. Phone sign-in works for accounts
+that already have the number; creating an account still needs a verified email, where receipts go.

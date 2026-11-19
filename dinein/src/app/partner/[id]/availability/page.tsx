@@ -29,6 +29,7 @@ export default function PartnerAvailabilityPage({ params }: { params: Promise<{ 
   const [rules, setRules] = useState<AvailabilityRule[] | null>(null);
   const [dirty, setDirty] = useState(false);
   const [closeDate, setCloseDate] = useState(localDate());
+  const [deposit, setDeposit] = useState<string | null>(null);
 
   const availability = useQuery({
     queryKey: ['partner-availability', id],
@@ -52,7 +53,7 @@ export default function PartnerAvailabilityPage({ params }: { params: Promise<{ 
   });
 
   const settings = useMutation({
-    mutationFn: async (patch: Partial<Availability['settings']>) =>
+    mutationFn: async (patch: Partial<Availability['settings']> & { coverChargePerGuest?: number }) =>
       (await api.patch<Availability>(`/partner/r/${id}/availability/settings`, patch)).data,
     onSuccess: setData,
   });
@@ -189,6 +190,34 @@ export default function PartnerAvailabilityPage({ params }: { params: Promise<{ 
               label="Confirm bookings instantly"
               description="Off: you accept each request from the Live screen"
             />
+            <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-inset ring-ink-200">
+              <p className="text-sm font-semibold">Table deposit per guest</p>
+              <p className="mt-0.5 text-xs text-ink-500">
+                Paid at booking, credited to the bill. Refunded if cancelled 24 h ahead; kept on late cancellations and no-shows. ₹0 = free booking.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <div className="flex flex-1 items-center rounded-xl ring-1 ring-inset ring-ink-300 focus-within:ring-2 focus-within:ring-brand-500">
+                  <span className="pl-3 text-sm text-ink-500">₹</span>
+                  <input
+                    inputMode="numeric"
+                    aria-label="Deposit per guest in rupees"
+                    value={deposit ?? String(current.coverChargePerGuestPaise / 100)}
+                    onChange={(e) => setDeposit(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    className="h-10 w-full bg-transparent px-2 text-sm focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    settings.mutate({ coverChargePerGuest: Number(deposit ?? 0) });
+                    setDeposit(null);
+                  }}
+                  disabled={deposit === null || settings.isPending}
+                  className="press h-10 rounded-xl bg-ink-900 px-4 text-sm font-bold text-white disabled:opacity-40"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
             <Toggle
               checked={current.payBillEnabled}
               onChange={(value) => settings.mutate({ payBillEnabled: value })}

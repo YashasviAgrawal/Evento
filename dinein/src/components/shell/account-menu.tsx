@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { CalendarCheck2, ChevronDown, ExternalLink, LogOut, Shield, Store, Ticket, User } from 'lucide-react';
+import { CalendarCheck2, ChevronDown, ExternalLink, LogOut, Shield, Store, Ticket, User, Wallet } from 'lucide-react';
 import { useAuth } from '@tixit/session';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@tixit/session';
@@ -85,6 +85,9 @@ export function AccountMenu({ tone = 'light' }: { tone?: 'light' | 'night' }) {
           <div className="my-1 h-px bg-ink-100" />
           <Link href="/bookings" className={item} onClick={() => setOpen(false)}>
             <CalendarCheck2 className="h-4 w-4 text-ink-400" /> Your plans
+          </Link>
+          <Link href="/wallet" className={item} onClick={() => setOpen(false)}>
+            <Wallet className="h-4 w-4 text-ink-400" /> Wallet
           </Link>
           {restaurants && restaurants.length > 0 && (
             <Link href="/partner" className={item} onClick={() => setOpen(false)}>

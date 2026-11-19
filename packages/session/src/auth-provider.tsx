@@ -38,6 +38,8 @@ export interface AuthContextValue {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<SessionUser>;
   signInWithOtp: (email: string, code: string) => Promise<SessionUser>;
+  /** Sign in with the code texted to the mobile number on an account. */
+  signInWithPhoneOtp: (phone: string, code: string) => Promise<SessionUser>;
   /** Exchange a Google ID token for a session, creating the account if needed. */
   signInWithGoogle: (credential: string) => Promise<{ user: SessionUser; created: boolean }>;
   verifyEmail: (email: string, code: string, purpose?: VerifyPurpose) => Promise<SessionUser>;
@@ -114,6 +116,11 @@ export function AuthProvider({ children, signedOutPath = '/' }: { children: Reac
     return setSession(data);
   }, []);
 
+  const signInWithPhoneOtp = useCallback(async (phone: string, code: string) => {
+    const { data } = await api.post<SessionResponse>('/auth/phone/otp/verify', { phone, code });
+    return setSession(data);
+  }, []);
+
   const signInWithGoogle = useCallback(async (credential: string) => {
     const { data } = await api.post<SessionResponse & { created: boolean }>('/auth/google', { credential });
     return { user: setSession(data), created: data.created };
@@ -155,8 +162,8 @@ export function AuthProvider({ children, signedOutPath = '/' }: { children: Reac
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, signIn, signInWithOtp, signInWithGoogle, verifyEmail, register, signOut, refreshUser }),
-    [user, loading, signIn, signInWithOtp, signInWithGoogle, verifyEmail, register, signOut, refreshUser],
+    () => ({ user, loading, signIn, signInWithOtp, signInWithPhoneOtp, signInWithGoogle, verifyEmail, register, signOut, refreshUser }),
+    [user, loading, signIn, signInWithOtp, signInWithPhoneOtp, signInWithGoogle, verifyEmail, register, signOut, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Navigation, Phone, ReceiptText } from 'lucide-react';
-import { api } from '@tixit/session';
+import { ArrowLeft, Navigation, Phone, ReceiptText, Wallet } from 'lucide-react';
+import { PAYMENT_CANCELLED, api } from '@tixit/session';
+import { payDeposit } from '@/lib/deposit';
 import { useToast } from '@tixit/ui';
 import type { Reservation } from '@/lib/types';
-import { cn, dateTime, localDate } from '@/lib/format';
+import { cn, dateTime, localDate, rupees } from '@/lib/format';
 import { directionsUrl } from '@/lib/urls';
 import { Photo } from '@/components/ui/photo';
 import { Sheet } from '@/components/ui/sheet';
@@ -42,10 +43,32 @@ export function ReservationDetail({ code }: { code: string }) {
     onError: (error) => toast.error('Could not cancel', error instanceof Error ? error.message : undefined),
   });
 
+  const depositPay = useMutation({
+    mutationFn: () => payDeposit(code),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['reservation', code], updated);
+      void queryClient.invalidateQueries({ queryKey: ['reservations'] });
+      toast.success('Deposit paid — your table is booked');
+    },
+    onError: (error) => {
+      if (error instanceof Error && error.message === PAYMENT_CANCELLED) return;
+      toast.error('Deposit not paid', error instanceof Error ? error.message : undefined);
+    },
+  });
+
   if (isLoading || !reservation) return <Skeleton className="mt-6 h-96 rounded-3xl" />;
 
   const status = STATUS_LABEL[reservation.status]!;
-  const live = ['placed', 'confirmed', 'seated'].includes(reservation.status);
+  const live = ['pending_payment', 'placed', 'confirmed', 'seated'].includes(reservation.status);
+  const deposit = reservation.deposit;
+  const holdMinutes = deposit?.holdExpiresAt ? Math.max(0, Math.ceil((new Date(deposit.holdExpiresAt).getTime() - Date.now()) / 60_000)) : 0;
+  const DEPOSIT_COPY: Record<string, string> = {
+    pending: `Pay within ${holdMinutes} min to keep this table.`,
+    paid: 'Held safely — credited to your bill when you pay on Tixit.',
+    credited: 'Credited to your bill.',
+    refunded: 'Refunded to your original payment method (5–7 working days).',
+    forfeited: 'Kept by the restaurant under the late-cancellation policy.',
+  };
   const isToday = reservation.localDate === localDate();
   const step = TIMELINE.findIndex((item) => item.key === reservation.status);
 
@@ -106,7 +129,33 @@ export function ReservationDetail({ code }: { code: string }) {
         </ol>
       )}
 
-      {live && isToday && (
+      {deposit && (
+        <div
+          className={cn(
+            'mt-4 flex items-center gap-3 rounded-2xl p-4 ring-1 ring-inset',
+            deposit.status === 'pending' ? 'bg-amber-50 ring-amber-200' : 'bg-white ring-ink-200',
+          )}
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white ring-1 ring-ink-200">
+            <Wallet className="h-5 w-5 text-ink-500" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold">Table deposit · {rupees(deposit.amountPaise)}</p>
+            <p className="text-xs text-ink-600">{DEPOSIT_COPY[deposit.status]}</p>
+          </div>
+          {deposit.status === 'pending' && reservation.status === 'pending_payment' && (
+            <button
+              onClick={() => depositPay.mutate()}
+              disabled={depositPay.isPending}
+              className="press h-10 shrink-0 rounded-xl bg-brand-600 px-4 text-sm font-bold text-white shadow-glow disabled:opacity-60"
+            >
+              {depositPay.isPending ? 'Paying…' : 'Pay now'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {live && isToday && reservation.status !== 'pending_payment' && (
         <Link
           href={`/pay/${reservation.restaurant.slug}`}
           className="press mt-4 flex h-14 items-center justify-center gap-2 rounded-2xl bg-brand-600 font-bold text-white shadow-glow"
@@ -169,7 +218,12 @@ export function ReservationDetail({ code }: { code: string }) {
       >
         <p className="text-sm leading-relaxed text-ink-600">
           The table goes back to the restaurant straight away
-          {reservation.offer ? `, and the ${reservation.offer.headline} you locked in won’t be held` : ''}. It’s free to cancel.
+          {reservation.offer ? `, and the ${reservation.offer.headline} you locked in won’t be held` : ''}.{' '}
+          {deposit?.status === 'paid'
+            ? deposit.refundableNow
+              ? `Your ${rupees(deposit.amountPaise)} deposit will be refunded in full.`
+              : `It’s less than 24 hours to your table, so the restaurant keeps the ${rupees(deposit.amountPaise)} deposit.`
+            : 'It’s free to cancel.'}
         </p>
       </Sheet>
     </div>

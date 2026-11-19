@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ExternalLink, LogOut, ShieldAlert, Store } from 'lucide-react';
+import { ExternalLink, LogOut, ShieldAlert, Store, Tag } from 'lucide-react';
 import { useAuth } from '@tixit/session';
 import { cn } from '@/lib/format';
 import { EVENTS_URL } from '@/lib/urls';
@@ -50,15 +50,18 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-300">Admin</span>
         </Link>
         <nav className="mt-8 space-y-1" aria-label="Admin">
-          <Link
-            href="/admin"
-            className={cn(
-              'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold',
-              pathname.startsWith('/admin') ? 'bg-white/10 text-white' : 'text-ink-300 hover:text-white',
-            )}
-          >
-            <Store className="h-4 w-4" /> Restaurants
-          </Link>
+          {[
+            { href: '/admin', label: 'Restaurants', icon: Store, active: pathname === '/admin' || /^\/admin\/[0-9a-f-]{36}/.test(pathname) },
+            { href: '/admin/offers', label: 'Codes & bank offers', icon: Tag, active: pathname.startsWith('/admin/offers') },
+          ].map(({ href, label, icon: Icon, active }) => (
+            <Link
+              key={href}
+              href={href}
+              className={cn('flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold', active ? 'bg-white/10 text-white' : 'text-ink-300 hover:text-white')}
+            >
+              <Icon className="h-4 w-4" /> {label}
+            </Link>
+          ))}
           <a href={`${EVENTS_URL}/admin`} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-ink-300 hover:text-white">
             <ExternalLink className="h-4 w-4" /> Events admin
           </a>
@@ -70,7 +73,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <div className="min-w-0">
         <header className="night flex items-center justify-between px-4 py-3 md:hidden">
           <p className="font-bold">Tixit Admin · Dine-in</p>
-          <Link href="/admin" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Restaurants</Link>
+          <span className="flex gap-1.5">
+            <Link href="/admin" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Restaurants</Link>
+            <Link href="/admin/offers" className="glass rounded-full px-3 py-1.5 text-xs font-bold">Offers</Link>
+          </span>
         </header>
         {children}
       </div>

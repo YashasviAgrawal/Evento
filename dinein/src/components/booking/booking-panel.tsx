@@ -5,10 +5,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarPlus, Check, MapPin, PartyPopper, ShieldCheck } from 'lucide-react';
-import { ApiError, api, useAuth } from '@tixit/session';
+import { ApiError, PAYMENT_CANCELLED, api, useAuth } from '@tixit/session';
+import { payDeposit } from '@/lib/deposit';
 import { useToast } from '@tixit/ui';
 import type { Reservation, SlotView } from '@/lib/types';
-import { addDays, clock, cn, dateTime, dayPill, localDate, shortClock } from '@/lib/format';
+import { addDays, clock, cn, dateTime, dayPill, localDate, rupees, shortClock } from '@/lib/format';
 import { directionsUrl } from '@/lib/urls';
 import { Stepper } from '@/components/ui/controls';
 import { Skeleton, Spinner } from '@/components/ui/feedback';
@@ -16,7 +17,7 @@ import { Skeleton, Spinner } from '@/components/ui/feedback';
 const OCCASIONS = ['Birthday', 'Anniversary', 'Date night', 'Business', 'Window seat'];
 
 interface Props {
-  restaurant: { slug: string; name: string; lat: number; lng: number };
+  restaurant: { slug: string; name: string; lat: number; lng: number; coverChargePerGuestPaise?: number };
   /** Pre-select a slot from a "7:30 · 30% off" chip tapped elsewhere. */
   initialSlotId?: string | null;
   horizonDays?: number;
@@ -65,14 +66,25 @@ export function BookingPanel({ restaurant, initialSlotId, horizonDays = 7 }: Pro
   const offerRank = (offer: SlotView['offer']) => (offer ? (offer.percentOff ?? 0) * 1e9 + (offer.flatOffPaise ?? 0) : 0);
   const deepestRank = Math.max(0, ...(slots.data ?? []).filter((slot) => slot.available).map((slot) => offerRank(slot.offer)));
 
+  const deposit = restaurant.coverChargePerGuestPaise ?? 0;
+
   const book = useMutation({
-    mutationFn: async () =>
-      (await api.post<Reservation>('/dining/reservations', {
+    mutationFn: async () => {
+      const { data: reservation } = await api.post<Reservation>('/dining/reservations', {
         slotId,
         partySize: party,
         occasion,
         notes: notes.trim() || null,
-      })).data,
+      });
+      if (reservation.status !== 'pending_payment') return reservation;
+      // A deposit is due: take it now, while the table is held.
+      try {
+        return await payDeposit(reservation.code);
+      } catch (error) {
+        if (error instanceof Error && error.message === PAYMENT_CANCELLED) return reservation;
+        throw error;
+      }
+    },
     onSuccess: (reservation) => {
       setBooked(reservation);
       void queryClient.invalidateQueries({ queryKey: ['slots', restaurant.slug] });
@@ -217,10 +229,22 @@ export function BookingPanel({ restaurant, initialSlotId, horizonDays = 7 }: Pro
       )}
 
       <div className="space-y-2.5">
-        <p className="flex items-center gap-2 text-xs text-ink-500">
-          <ShieldCheck className="h-4 w-4 shrink-0 text-save-600" aria-hidden />
-          Free booking · cancel any time before your table · offer applies when you pay on Tixit
-        </p>
+        {deposit > 0 ? (
+          <div className="rounded-2xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 ring-1 ring-inset ring-amber-200">
+            <p className="font-bold">
+              Table deposit: {rupees(deposit)} per guest{selected ? ` · ${rupees(deposit * party)} now` : ''}
+            </p>
+            <p className="mt-0.5">
+              Credited to your bill when you pay on Tixit. Cancel 24 hours ahead for a full refund; later cancellations and
+              no-shows keep the deposit.
+            </p>
+          </div>
+        ) : (
+          <p className="flex items-center gap-2 text-xs text-ink-500">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-save-600" aria-hidden />
+            Free booking · cancel any time before your table · offer applies when you pay on Tixit
+          </p>
+        )}
         <button
           type="button"
           onClick={confirm}
@@ -231,7 +255,7 @@ export function BookingPanel({ restaurant, initialSlotId, horizonDays = 7 }: Pro
             <Spinner className="border-white/40 border-t-white" />
           ) : selected ? (
             <span className="truncate">
-              Confirm · {dayPill(date, today).top === 'Today' ? 'Today' : `${dayPill(date, today).top} ${dayPill(date, today).day}`},{' '}
+              {deposit > 0 ? `Pay ${rupees(deposit * party)} & book` : 'Confirm'} · {dayPill(date, today).top === 'Today' ? 'Today' : `${dayPill(date, today).top} ${dayPill(date, today).day}`},{' '}
               {clock(selected.time)} · {party} {party === 1 ? 'guest' : 'guests'}
               {selected.offer ? ` · ${selected.offer.label}` : ''}
             </span>
@@ -310,6 +334,22 @@ export function BookingConfirmed({
   restaurant: { slug: string; name: string; lat: number; lng: number };
 }) {
   const pending = reservation.status === 'placed';
+  if (reservation.status === 'pending_payment') {
+    return (
+      <div className="animate-enter pt-4 text-center">
+        <h3 className="text-xl font-extrabold tracking-tight">Your table is held</h3>
+        <p className="mt-1 text-sm text-ink-500">
+          Pay the {reservation.deposit ? rupees(reservation.deposit.amountPaise) : ''} deposit to confirm it before the hold runs out.
+        </p>
+        <Link
+          href={`/bookings/${reservation.code}`}
+          className="press mt-5 flex h-12 items-center justify-center rounded-2xl bg-brand-600 text-sm font-bold text-white shadow-glow"
+        >
+          Finish booking
+        </Link>
+      </div>
+    );
+  }
   return (
     <div className="animate-enter pt-4">
       <div className="flex flex-col items-center text-center">

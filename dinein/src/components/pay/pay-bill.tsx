@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CalendarCheck2, Check, Delete, Lock, TicketPercent, X } from 'lucide-react';
+import { ArrowLeft, CalendarCheck2, Check, CreditCard, Delete, Lock, TicketPercent, X } from 'lucide-react';
 import { ApiError, api, openCheckout, PAYMENT_CANCELLED, useAuth } from '@tixit/session';
 import { useToast } from '@tixit/ui';
 import type { Bill, BillCheckout, BillQuote, Reservation } from '@/lib/types';
@@ -66,6 +66,8 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
   const [couponInput, setCouponInput] = useState(params.get('code') ?? '');
   const [coupon, setCoupon] = useState<string | null>(params.get('code'));
   const [couponOpen, setCouponOpen] = useState(Boolean(params.get('code')));
+  const [useWallet, setUseWallet] = useState(params.get('wallet') !== '0');
+  const [bankOfferId, setBankOfferId] = useState<string | null>(params.get('bank'));
   const idempotencyKey = useRef<string>(typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now()));
 
   // Today's table here, if any: paying from it applies the pre-book offer that was promised.
@@ -90,8 +92,10 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
       tip,
       couponCode: coupon,
       reservationCode: todaysTable?.code ?? null,
+      useWallet,
+      bankOfferId,
     }),
-    [restaurant.id, billValue, excludedValue, keepService, tip, coupon, todaysTable?.code],
+    [restaurant.id, billValue, excludedValue, keepService, tip, coupon, todaysTable?.code, useWallet, bankOfferId],
   );
   const debounced = useDebounced(input, 250);
 
@@ -150,6 +154,16 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
         toast.error('That code can’t be used', error.message);
         return;
       }
+      if (error instanceof ApiError && error.code === 'BANK_OFFER_INVALID') {
+        setBankOfferId(null);
+        toast.error('That bank offer doesn’t apply', error.message);
+        return;
+      }
+      if (error instanceof ApiError && error.code === 'WALLET_CHANGED') {
+        void quote.refetch();
+        toast.error('Your wallet balance changed', 'We’ve updated the bill — please check it again.');
+        return;
+      }
       toast.error('Payment didn’t go through', error instanceof Error ? error.message : 'Please try again.');
     },
   });
@@ -162,6 +176,8 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
         ...(keepService ? { sc: '1' } : {}),
         ...(tip ? { tip: String(tip) } : {}),
         ...(coupon ? { code: coupon } : {}),
+        ...(!useWallet ? { wallet: '0' } : {}),
+        ...(bankOfferId ? { bank: bankOfferId } : {}),
         step: 'review',
       });
       router.push(`/auth/login?next=${encodeURIComponent(`${pathname}?${draft}`)}&reason=pay`);
@@ -246,6 +262,53 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
                   </p>
                 )}
               </div>
+
+              {quote.data && quote.data.bankOptions.length > 0 && (
+                <div className="rounded-2xl bg-white p-3.5 ring-1 ring-ink-200">
+                  <p className="flex items-center gap-2 text-sm font-bold">
+                    <CreditCard className="h-4 w-4 text-ink-400" /> Bank offers
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-500">Pick one, then pay with that bank’s card or UPI.</p>
+                  <ul className="mt-2.5 space-y-2" role="radiogroup" aria-label="Bank offers">
+                    {[{ id: null, title: 'No bank offer', bankName: null, unavailableReason: null, paymentMethods: [] as string[] }, ...quote.data.bankOptions].map((option) => {
+                      const selected = bankOfferId === option.id;
+                      const disabled = Boolean(option.unavailableReason);
+                      return (
+                        <li key={option.id ?? 'none'}>
+                          <button
+                            role="radio"
+                            aria-checked={selected}
+                            disabled={disabled}
+                            onClick={() => setBankOfferId(option.id)}
+                            className={cn(
+                              'flex w-full items-center gap-3 rounded-xl p-3 text-left text-sm ring-1 ring-inset transition',
+                              selected ? 'bg-save-50 ring-2 ring-save-500' : 'ring-ink-200 hover:ring-ink-300',
+                              disabled && 'cursor-not-allowed opacity-50',
+                            )}
+                          >
+                            <span className={cn('h-4 w-4 shrink-0 rounded-full ring-2 ring-inset', selected ? 'bg-save-600 ring-save-600' : 'ring-ink-300')} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-semibold">{option.title}</span>
+                              {option.id && (
+                                <span className="block text-xs text-ink-500">
+                                  {option.unavailableReason ??
+                                    (option.paymentMethods.length
+                                      ? `${option.bankName} · ${option.paymentMethods.map((m) => m.replace('_', ' ')).join(', ')}`
+                                      : option.bankName)}
+                                </span>
+                              )}
+                            </span>
+                            {selected && pricing.bankOffer && (
+                              <span className="num shrink-0 font-bold text-save-700">−{rupees(pricing.bankOffer.discountPaise)}</span>
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {bankOfferId && pricing.bankOfferError && <p className="mt-2 text-xs font-semibold text-rose-600">{pricing.bankOfferError}</p>}
+                </div>
+              )}
 
               <SavingsBanner pricing={pricing} />
             </>
@@ -355,6 +418,21 @@ export function PayBill({ restaurant }: { restaurant: PayRestaurant }) {
           </div>
         </div>
       </section>
+
+      {quote.data && quote.data.walletAvailablePaise > 0 && (
+        <div className="mx-4 mt-2 sm:mx-0">
+          <Toggle
+            checked={useWallet}
+            onChange={setUseWallet}
+            label={`Use Tixit Wallet · ${rupees(quote.data.walletAvailablePaise)}`}
+            description={
+              useWallet && pricing?.walletUsedPaise
+                ? `${rupees(pricing.walletUsedPaise)} applied to this bill`
+                : 'Your cashback, spendable on any bill'
+            }
+          />
+        </div>
+      )}
 
       <div className="mx-4 mt-3 flex h-12 items-center justify-between rounded-2xl bg-save-50 px-4 text-sm text-save-800 ring-1 ring-inset ring-save-100 sm:mx-0">
         {pricing ? (

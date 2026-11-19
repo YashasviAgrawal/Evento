@@ -37,7 +37,7 @@ export default function AdminRestaurantPage({ params }: { params: Promise<{ id: 
   const key = ['admin-restaurant', id];
   const { data, isLoading } = useQuery({ queryKey: key, queryFn: async () => (await api.get<AdminRestaurant>(`/admin/dining/restaurants/${id}`)).data });
 
-  const [commercials, setCommercials] = useState({ commissionPercent: '', serviceChargePercent: '', gstin: '', fssai: '' });
+  const [commercials, setCommercials] = useState({ commissionPercent: '', serviceChargePercent: '', gstin: '', fssai: '', razorpayAccountId: '' });
   const [member, setMember] = useState({ email: '', role: 'manager' });
   const [payout, setPayout] = useState({ amount: '', utr: '' });
 
@@ -48,6 +48,7 @@ export default function AdminRestaurantPage({ params }: { params: Promise<{ id: 
         serviceChargePercent: String(data.serviceChargePercent),
         gstin: data.gstin ?? '',
         fssai: data.fssai ?? '',
+        razorpayAccountId: data.razorpayAccountId ?? '',
       });
     }
   }, [data]);
@@ -72,6 +73,7 @@ export default function AdminRestaurantPage({ params }: { params: Promise<{ id: 
         serviceChargePercent: Number(commercials.serviceChargePercent),
         gstin: commercials.gstin || null,
         fssai: commercials.fssai || null,
+        razorpayAccountId: commercials.razorpayAccountId || null,
       }),
     onSuccess: () => {
       toast.success('Commercials saved', 'New bills use the new commission; past bills keep theirs.');
@@ -94,9 +96,13 @@ export default function AdminRestaurantPage({ params }: { params: Promise<{ id: 
     onError: (e) => toast.error('Could not remove', errorText(e, '')),
   });
   const settle = useMutation({
-    mutationFn: async () => api.post<{ reference: string }>(`/admin/dining/restaurants/${id}/settlements`, { amount: Number(payout.amount), utr: payout.utr || null }),
+    mutationFn: async () =>
+      api.post<{ reference: string; method: string; transferId: string | null }>(`/admin/dining/restaurants/${id}/settlements`, {
+        amount: Number(payout.amount),
+        utr: payout.utr || null,
+      }),
     onSuccess: (res) => {
-      toast.success('Payout recorded', res.data.reference);
+      toast.success(res.data.method === 'route' ? 'Sent via Razorpay Route' : 'Payout recorded', res.data.transferId ?? res.data.reference);
       setPayout({ amount: '', utr: '' });
       refresh();
     },
@@ -159,6 +165,7 @@ export default function AdminRestaurantPage({ params }: { params: Promise<{ id: 
                 ['serviceChargePercent', 'Service charge %'],
                 ['gstin', 'GSTIN'],
                 ['fssai', 'FSSAI'],
+                ['razorpayAccountId', 'Razorpay linked account (acc_…)'],
               ] as const
             ).map(([k, label]) => (
               <div key={k}>
@@ -173,17 +180,25 @@ export default function AdminRestaurantPage({ params }: { params: Promise<{ id: 
         </section>
 
         <section className={card}>
-          <h2 className="flex items-center gap-2 font-bold"><Landmark className="h-4 w-4 text-ink-400" /> Record a payout</h2>
-          <p className="text-xs text-ink-500">Posted to the ledger. It can never exceed what is owed ({rupees(data.payableBalancePaise)}).</p>
+          <h2 className="flex items-center gap-2 font-bold">
+            <Landmark className="h-4 w-4 text-ink-400" /> {data.routePayouts ? 'Pay out via Razorpay Route' : 'Record a payout'}
+          </h2>
+          <p className="text-xs text-ink-500">
+            {data.routePayouts
+              ? `Sent straight to ${data.razorpayAccountId}. Never more than what is owed (${rupees(data.payableBalancePaise)}).`
+              : `Record a manual bank transfer with its UTR. Never more than what is owed (${rupees(data.payableBalancePaise)}).`}
+          </p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div>
               <label className="label" htmlFor="amount">Amount ₹</label>
               <input id="amount" inputMode="decimal" className="input" value={payout.amount} onChange={(e) => setPayout((p) => ({ ...p, amount: e.target.value }))} />
             </div>
-            <div>
-              <label className="label" htmlFor="utr">Bank UTR</label>
-              <input id="utr" className="input" value={payout.utr} onChange={(e) => setPayout((p) => ({ ...p, utr: e.target.value }))} />
-            </div>
+            {!data.routePayouts && (
+              <div>
+                <label className="label" htmlFor="utr">Bank UTR</label>
+                <input id="utr" className="input" value={payout.utr} onChange={(e) => setPayout((p) => ({ ...p, utr: e.target.value }))} />
+              </div>
+            )}
           </div>
           <div className="mt-4 flex gap-2">
             <button
@@ -192,8 +207,12 @@ export default function AdminRestaurantPage({ params }: { params: Promise<{ id: 
             >
               Full balance
             </button>
-            <button onClick={() => settle.mutate()} disabled={!payout.amount || settle.isPending} className="press h-11 rounded-xl bg-ink-900 px-5 text-sm font-bold text-white disabled:opacity-60">
-              Record payout
+            <button
+              onClick={() => settle.mutate()}
+              disabled={!payout.amount || (!data.routePayouts && !payout.utr) || settle.isPending}
+              className="press h-11 rounded-xl bg-ink-900 px-5 text-sm font-bold text-white disabled:opacity-60"
+            >
+              {data.routePayouts ? 'Send payout' : 'Record payout'}
             </button>
           </div>
         </section>

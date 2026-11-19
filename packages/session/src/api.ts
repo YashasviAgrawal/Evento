@@ -64,6 +64,7 @@ const SIGN_IN_FAILURE_CODES = new Set([
   'OTP_INVALID',
   'OTP_EXPIRED',
   'OTP_NOT_FOUND',
+  'PHONE_NOT_REGISTERED',
 ]);
 
 function authHeaders(): Record<string, string> {
