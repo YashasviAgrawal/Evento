@@ -58,6 +58,8 @@ interface OfferSeed {
 }
 
 interface RestaurantSeed {
+  /** City slug; Jaipur when omitted. */
+  city?: string;
   name: string;
   locality: string;
   address: string;
@@ -286,20 +288,107 @@ const RESTAURANTS: RestaurantSeed[] = [
       { title: '15% off pre-booked dinners', percent: 15, appliesTo: 'prebook', start: '19:00', end: '23:30' },
     ],
   },
+  {
+    city: 'delhi',
+    name: 'Lodhi Garden House',
+    locality: 'Lodhi Colony',
+    address: 'Lodhi Road, near Gate 1, New Delhi 110003',
+    lat: 28.5933,
+    lng: 77.2197,
+    cost: 2400,
+    cuisines: ['Modern Indian', 'European', 'Cocktails'],
+    tags: ['date-night', 'garden', 'fine-dine'],
+    description: 'A glasshouse dining room overlooking the tombs of Lodhi Garden, with a seasonal menu and a long wine list.',
+    hours: [['12:00', '15:30'], ['19:00', '23:30']],
+    serviceCharge: 5,
+    featured: true,
+    rating: [4.6, 3120],
+    offers: [
+      { title: 'Flat 25% off when you pre-book', percent: 25, appliesTo: 'prebook', days: [1, 2, 3, 4] },
+      { title: '10% off the bill', percent: 10, appliesTo: 'walkin', terms: 'Not valid on alcohol.' },
+    ],
+  },
+  {
+    city: 'delhi',
+    name: 'Hauz Khas Social Club',
+    locality: 'Hauz Khas Village',
+    address: '9A Hauz Khas Village, New Delhi 110016',
+    lat: 28.5535,
+    lng: 77.194,
+    cost: 1600,
+    cuisines: ['Continental', 'Finger Food', 'Brewpub'],
+    tags: ['bar', 'live-music', 'lake-view'],
+    description: 'Craft taps and small plates above the Hauz Khas lake, with DJs from Thursday to Sunday.',
+    hours: [['12:00', '01:00']],
+    rating: [4.3, 5210],
+    offers: [
+      { title: 'Golden hour: 30% off', percent: 30, appliesTo: 'both', start: '16:00', end: '19:30' },
+      { title: '15% off pre-booked dinners', percent: 15, appliesTo: 'prebook' },
+    ],
+  },
+  {
+    city: 'delhi',
+    name: 'Khan Chacha Kebab House',
+    locality: 'Khan Market',
+    address: '75 Middle Lane, Khan Market, New Delhi 110003',
+    lat: 28.6003,
+    lng: 77.227,
+    cost: 900,
+    cuisines: ['Mughlai', 'Kebabs', 'North Indian'],
+    tags: ['quick-bites', 'family'],
+    description: 'Charcoal-grilled rolls and seekh kebabs, the way Khan Market has eaten them for decades.',
+    hours: [['12:00', '23:00']],
+    rating: [4.4, 8900],
+    offers: [{ title: '20% off the bill', percent: 20, appliesTo: 'both', terms: 'Not valid on combos.' }],
+  },
+  {
+    city: 'delhi',
+    name: 'Saravana Leaf',
+    locality: 'Connaught Place',
+    address: 'P-15 Connaught Circus, New Delhi 110001',
+    lat: 28.6315,
+    lng: 77.2167,
+    cost: 700,
+    cuisines: ['South Indian', 'Thali'],
+    tags: ['pure-veg', 'family'],
+    description: 'Banana-leaf thalis, crisp dosas and filter coffee in the middle of Connaught Place.',
+    hours: [['08:00', '22:30']],
+    rating: [4.5, 6400],
+    offers: [{ title: '15% off the bill', percent: 15, appliesTo: 'both' }],
+  },
+  {
+    city: 'delhi',
+    name: 'Qutub Terrace',
+    locality: 'Mehrauli',
+    address: 'Kalka Das Marg, Mehrauli, New Delhi 110030',
+    lat: 28.5244,
+    lng: 77.1855,
+    cost: 2800,
+    cuisines: ['North Indian', 'Mediterranean'],
+    tags: ['rooftop', 'view', 'date-night'],
+    description: 'Dinner on the terrace with the Qutub Minar lit up across the rooftops.',
+    hours: [['18:30', '00:30']],
+    serviceCharge: 5,
+    rating: [4.7, 1980],
+    offers: [{ title: 'Flat 20% off when you pre-book', percent: 20, appliesTo: 'prebook' }],
+  },
 ];
 
-const COLLECTIONS = [
-  { slug: 'rooftops-of-jaipur', title: 'Rooftops of Jaipur', subtitle: 'Forts, sunsets and the Pink City lit up below', tags: ['rooftop', 'view'], cover: INTERIORS[4]! },
+/** `city`: a city-specific collection; omitted means it applies in every city. */
+const COLLECTIONS: Array<{ slug: string; title: string; subtitle: string; tags: string[]; cover: string; city?: string }> = [
+  { slug: 'rooftops-of-jaipur', title: 'Rooftops of Jaipur', subtitle: 'Forts, sunsets and the Pink City lit up below', tags: ['rooftop', 'view'], cover: INTERIORS[4]!, city: 'jaipur' },
   { slug: 'date-night', title: 'Date-night tables', subtitle: 'Low lights, good wine, no rush', tags: ['date-night'], cover: INTERIORS[1]! },
-  { slug: 'heritage-havelis', title: 'Heritage havelis', subtitle: 'Dine where the maharajas did', tags: ['heritage'], cover: INTERIORS[2]! },
+  { slug: 'heritage-havelis', title: 'Heritage havelis', subtitle: 'Dine where the maharajas did', tags: ['heritage'], cover: INTERIORS[2]!, city: 'jaipur' },
+  { slug: 'delhi-skyline-dining', title: 'Delhi, from above', subtitle: 'Terraces with a monument in view', tags: ['rooftop', 'view'], cover: INTERIORS[0]!, city: 'delhi' },
   { slug: 'live-music', title: 'Live music tonight', subtitle: 'Jazz, ghazals and Friday-night bands', tags: ['live-music'], cover: INTERIORS[5]! },
   { slug: 'pure-veg', title: 'Pure veg favourites', subtitle: 'Thalis, bowls and the best of the garden', tags: ['pure-veg'], cover: FOOD[3]! },
   { slug: 'bars-and-brewpubs', title: 'Bars & brewpubs', subtitle: 'Taps, cocktails and late kitchens', tags: ['bar'], cover: INTERIORS[3]! },
 ];
 
 export async function seedDining(users: { adminId: string; customerIds: string[]; passwordHash: string }): Promise<void> {
-  const city = await queryOne<{ id: string }>(`SELECT id FROM cities WHERE slug = 'jaipur'`);
-  if (!city) throw new Error('Jaipur missing from reference data');
+  const { rows: cityRows } = await query<{ id: string; slug: string }>(`SELECT id, slug FROM cities WHERE slug IN ('jaipur', 'delhi')`);
+  const cityIds = new Map(cityRows.map((row) => [row.slug, row.id]));
+  if (cityIds.size < 2) throw new Error('Jaipur and Delhi must be in the reference data');
 
   /* ── partner team (ordinary Tixit accounts — memberships grant access) ── */
   const partner = await queryOne<{ id: string }>(
@@ -328,12 +417,12 @@ export async function seedDining(users: { adminId: string; customerIds: string[]
         `${slug}-${seed.locality.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
         seed.name,
         seed.description,
-        city.id,
+        cityIds.get(seed.city ?? 'jaipur')!,
         seed.locality,
         seed.address,
         seed.lat,
         seed.lng,
-        `+91 141 ${String(4000000 + index * 7919).slice(0, 7)}`,
+        `+91 ${seed.city === 'delhi' ? '11' : '141'} ${String(4000000 + index * 7919).slice(0, 7)}`,
         seed.cost * 100,
         seed.cuisines,
         seed.tags,
@@ -345,7 +434,7 @@ export async function seedDining(users: { adminId: string; customerIds: string[]
         seed.rating[0],
         seed.rating[1],
         seed.featured ?? false,
-        `08AABCE${String(1000 + index)}F1Z${index % 10}`,
+        `${seed.city === 'delhi' ? '07' : '08'}AABCE${String(1000 + index)}F1Z${index % 10}`,
         `1222101900${String(1000 + index)}`,
       ],
     );
@@ -412,7 +501,7 @@ export async function seedDining(users: { adminId: string; customerIds: string[]
     await query(
       `INSERT INTO dining.collections (slug, city_id, title, subtitle, cover_url, match_tags, sort)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [collection.slug, city.id, collection.title, collection.subtitle, img(collection.cover, 900), collection.tags, sort],
+      [collection.slug, collection.city ? cityIds.get(collection.city)! : null, collection.title, collection.subtitle, img(collection.cover, 900), collection.tags, sort],
     );
   }
 

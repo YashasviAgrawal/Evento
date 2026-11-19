@@ -6,12 +6,14 @@ import type { RestaurantCard } from '@/lib/types';
 import { Photo } from '@/components/ui/photo';
 import { OfferBadge } from '@/components/restaurant/bits';
 import { TodaysTables } from './todays-table';
+import { currentCity } from '@/lib/city.server';
 
 export const metadata: Metadata = { title: 'Pay your bill', description: 'Pay your restaurant bill on Tixit and save instantly.' };
 
 export default async function PayPickerPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q } = await searchParams;
-  const result = await fetchPublicPaged<RestaurantCard[]>('/dining/restaurants', { city: 'jaipur', payBill: 1, q, sort: 'offer', limit: 48 }, 60);
+  const city = await currentCity();
+  const result = await fetchPublicPaged<RestaurantCard[]>('/dining/restaurants', { city, payBill: 1, q, sort: 'offer', limit: 48 }, 60);
   const restaurants = result?.data ?? [];
 
   return (

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, BadgePercent, CalendarClock, MapPin, Music2, Leaf, Search, ShieldCheck, Sparkles, Sunset, Wine, Zap } from 'lucide-react';
+import { ArrowRight, BadgePercent, CalendarClock, Music2, Leaf, Search, ShieldCheck, Sparkles, Sunset, Wine, Zap } from 'lucide-react';
 import { fetchPublic } from '@tixit/session';
 import type { HomeFeed } from '@/lib/types';
 import { SiteHeader } from '@/components/shell/site-header';
@@ -7,8 +7,9 @@ import { Footer } from '@/components/shell/footer';
 import { Photo } from '@/components/ui/photo';
 import { Rail, RailCard, RestaurantCard } from '@/components/restaurant/restaurant-card';
 import { EmptyState } from '@/components/ui/feedback';
+import { CityPicker } from '@/components/shell/city-picker';
+import { currentCity } from '@/lib/city.server';
 
-export const revalidate = 60;
 
 const INTENTS = [
   { href: '/restaurants?openNow=1&sort=offer', label: 'Tonight', icon: Zap },
@@ -27,7 +28,8 @@ const STEPS = [
 ];
 
 export default async function HomePage() {
-  const response = await fetchPublic<HomeFeed>('/dining/home', { city: 'jaipur' }, 60);
+  const citySlug = await currentCity();
+  const response = await fetchPublic<HomeFeed>('/dining/home', { city: citySlug }, 60);
   // A city with nothing live yet gets the friendly empty state, never "0 restaurants".
   const feed = response && response.restaurantCount > 0 ? response : null;
   const deepestPercent = Math.max(0, ...(feed?.bestOffers ?? []).map((card) => card.bestOffer?.percentOff ?? 0));
@@ -37,9 +39,7 @@ export default async function HomePage() {
       <section className="night pb-14 sm:pb-20">
         <SiteHeader tone="night" />
         <div className="container-page pt-6 sm:pt-12">
-          <p className="eyebrow flex items-center gap-1.5 text-brand-300">
-            <MapPin className="h-3.5 w-3.5" aria-hidden /> Dining in {feed?.city.name ?? 'Jaipur'}
-          </p>
+          <CityPicker current={response?.city ?? { name: 'Jaipur', slug: citySlug }} />
           <h1 className="mt-3 max-w-3xl text-[34px] font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
             Where are we
             <br />

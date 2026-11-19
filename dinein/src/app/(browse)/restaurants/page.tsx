@@ -8,20 +8,27 @@ import { EmptyState } from '@/components/ui/feedback';
 import { humanTag, plural } from '@/lib/format';
 import { Filters } from './filters';
 import Link from 'next/link';
+import { CityPicker } from '@/components/shell/city-picker';
+import { currentCity } from '@/lib/city.server';
 
 type Params = Record<string, string | string[] | undefined>;
 
-function heading(params: Params): string {
+function heading(params: Params, cityName: string): string {
   if (params.q) return `“${params.q}”`;
+  if (params.lat && params.lng) return 'Restaurants nearby';
   if (params.tag) return `${humanTag(String(params.tag))} restaurants`;
-  if (params.cuisine) return `${params.cuisine} in Jaipur`;
+  if (params.cuisine) return `${params.cuisine} in ${cityName}`;
   if (params.openNow) return 'Open right now';
-  return 'Restaurants in Jaipur';
+  return `Restaurants in ${cityName}`;
 }
+
+const cityName = (slug: string, home: HomeFeed | null) => home?.city.name ?? slug.charAt(0).toUpperCase() + slug.slice(1);
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<Params> }): Promise<Metadata> {
   const params = await searchParams;
-  return { title: heading(params), description: 'Book a table and pay your bill on Tixit to save instantly.' };
+  const city = await currentCity(params.city);
+  const home = await fetchPublic<HomeFeed>('/dining/home', { city }, 300);
+  return { title: heading(params, cityName(city, home)), description: 'Book a table and pay your bill on Tixit to save instantly.' };
 }
 
 export default async function RestaurantsPage({ searchParams }: { searchParams: Promise<Params> }) {
@@ -32,9 +39,12 @@ export default async function RestaurantsPage({ searchParams }: { searchParams: 
       typeof params[key] === 'string' ? (params[key] as string) : undefined,
     ]),
   );
+  const city = await currentCity(params.city);
+  // A search around a point (e.g. "eat near the venue") crosses city lines.
+  const nearby = Boolean(query.lat && query.lng);
   const [result, home] = await Promise.all([
-    fetchPublicPaged<RestaurantCard[]>('/dining/restaurants', { city: 'jaipur', limit: 24, ...query }, 30),
-    fetchPublic<HomeFeed>('/dining/home', { city: 'jaipur' }, 300),
+    fetchPublicPaged<RestaurantCard[]>('/dining/restaurants', { city: nearby ? undefined : city, limit: 24, ...query }, 30),
+    fetchPublic<HomeFeed>('/dining/home', { city }, 300),
   ]);
   const items = result?.data ?? [];
   const linkQuery = Object.fromEntries(Object.entries(query).filter(([, value]) => value !== undefined)) as Record<string, string>;
@@ -42,7 +52,8 @@ export default async function RestaurantsPage({ searchParams }: { searchParams: 
 
   return (
     <div className="container-page py-6 sm:py-10">
-      <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{heading(params)}</h1>
+      {!nearby && <CityPicker tone="light" current={{ name: cityName(city, home), slug: city }} />}
+      <h1 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">{heading(params, cityName(city, home))}</h1>
       <p className="mt-1 text-sm text-ink-500">
         {result ? plural(result.meta?.total ?? items.length, 'place') : 'Searching…'} · offers apply when you pay the bill on Tixit
       </p>

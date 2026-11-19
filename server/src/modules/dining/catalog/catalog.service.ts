@@ -291,16 +291,31 @@ export async function homeFeed(citySlug: string) {
   };
 }
 
-export async function getCollection(slug: string) {
+/** Cities where at least one restaurant is live — what the city picker offers. */
+export async function listCities() {
+  const { rows } = await query<{ id: string; name: string; slug: string; state: string; restaurants: number }>(
+    `SELECT c.id, c.name, c.slug, c.state, count(r.id)::int AS restaurants
+       FROM cities c JOIN dining.restaurants r ON r.city_id = c.id AND r.status = 'live'
+      GROUP BY c.id ORDER BY count(r.id) DESC, c.name`,
+  );
+  return rows;
+}
+
+/**
+ * A collection's restaurants. City-wide collections (no city of their own)
+ * are narrowed to the diner's city when one is given.
+ */
+export async function getCollection(slug: string, citySlug?: string) {
   const collection = await queryOne<{ slug: string; title: string; subtitle: string | null; cover_url: string | null; match_tags: string[]; city_id: string | null }>(
     'SELECT slug, title, subtitle, cover_url, match_tags, city_id FROM dining.collections WHERE slug = $1 AND is_active',
     [slug],
   );
   if (!collection) throw new NotFoundError('Collection');
   const { rows } = await query<CardRow>(
-    `${CARD_SELECT} WHERE r.status = 'live' AND r.tags && $1 AND ($2::uuid IS NULL OR r.city_id = $2)
+    `${CARD_SELECT} WHERE r.status = 'live' AND r.tags && $1
+        AND r.city_id = COALESCE($2::uuid, (SELECT id FROM cities WHERE slug = $3), r.city_id)
       ORDER BY r.rating_avg DESC LIMIT 60`,
-    [collection.match_tags, collection.city_id],
+    [collection.match_tags, collection.city_id, citySlug ?? null],
   );
   return {
     slug: collection.slug,

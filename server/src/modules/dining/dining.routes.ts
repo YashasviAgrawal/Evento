@@ -88,9 +88,14 @@ router.get(
 
 router.get(
   '/collections/:slug',
-  validate({ params: z.object({ slug: z.string().min(1).max(120) }) }),
-  asyncHandler(async (req, res) => ok(res, await catalog.getCollection(req.params.slug!))),
+  validate({
+    params: z.object({ slug: z.string().min(1).max(120) }),
+    query: z.object({ city: z.string().trim().max(60).optional() }),
+  }),
+  asyncHandler(async (req, res) => ok(res, await catalog.getCollection(req.params.slug!, req.query.city as string | undefined))),
 );
+
+router.get('/cities', asyncHandler(async (_req, res) => ok(res, await catalog.listCities())));
 
 /* ───────────────────────── bills (quote is public) ───────────────────────── */
 

@@ -4,9 +4,11 @@ import { fetchPublic } from '@tixit/session';
 import type { CollectionPage } from '@/lib/types';
 import { Photo } from '@/components/ui/photo';
 import { RestaurantCard } from '@/components/restaurant/restaurant-card';
+import { currentCity } from '@/lib/city.server';
 
 type Props = { params: Promise<{ slug: string }> };
-const load = (slug: string) => fetchPublic<CollectionPage>(`/dining/collections/${slug}`, undefined, 300);
+// City-wide collections (date night, live music…) show the diner's own city.
+const load = async (slug: string) => fetchPublic<CollectionPage>(`/dining/collections/${slug}`, { city: await currentCity() }, 300);
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const collection = await load((await params).slug);
