@@ -5,6 +5,7 @@ import { BadRequestError, ConflictError, NotFoundError, PaymentError } from '../
 import { sendMailAsync } from '../../services/mail.service';
 import * as gateway from '../../services/razorpay.provider';
 import { confirmBooking } from '../bookings/booking.service';
+import { paymentSubjectHandler } from './subjects';
 
 /* ───────────────────────── create order ───────────────────────── */
 
@@ -303,10 +304,13 @@ async function handlePaymentCaptured(entity: Record<string, unknown>): Promise<v
   const paymentId = String(entity.id ?? '');
   if (!orderId) return;
 
-  const payment = await queryOne<{ id: string; booking_id: string; status: string; amount_paise: number }>(
-    'SELECT id, booking_id, status, amount_paise FROM payments WHERE provider_order_id = $1',
-    [orderId],
-  );
+  const payment = await queryOne<{
+    id: string;
+    booking_id: string | null;
+    bill_payment_id: string | null;
+    status: string;
+    amount_paise: number;
+  }>('SELECT id, booking_id, bill_payment_id, status, amount_paise FROM payments WHERE provider_order_id = $1', [orderId]);
   if (!payment) {
     logger.warn({ orderId }, 'Webhook referenced an unknown order');
     return;
@@ -320,6 +324,12 @@ async function handlePaymentCaptured(entity: Record<string, unknown>): Promise<v
       WHERE id = $1`,
     [payment.id, paymentId || null, method, JSON.stringify(entity)],
   );
+
+  if (payment.bill_payment_id) {
+    await paymentSubjectHandler('bill_payment').captured(payment.bill_payment_id, { method, paymentId });
+    return;
+  }
+  if (!payment.booking_id) return;
 
   const confirmed = await confirmBooking(payment.booking_id, { method, paymentId });
   if (confirmed) {

@@ -60,6 +60,11 @@ const USER_SELECT = `
     FROM users u
     LEFT JOIN organizers o ON o.user_id = u.id`;
 
+/** The active user behind a session, in the shape `toPublicUser` takes. */
+export async function getUserRowForSession(userId: string): Promise<UserRow | null> {
+  return queryOne<UserRow>(`${USER_SELECT} WHERE u.id = $1 AND u.status = 'active'`, [userId]);
+}
+
 export function toPublicUser(row: UserRow): PublicUser {
   return {
     id: row.id,

@@ -66,7 +66,8 @@ export const env = {
   port: num('PORT', 4000),
   apiBaseUrl: str('API_BASE_URL', 'http://localhost:4000'),
   webBaseUrl: str('WEB_BASE_URL', 'http://localhost:3000'),
-  corsOrigins: list('CORS_ORIGINS', ['http://localhost:3000']),
+  dineinBaseUrl: str('DINEIN_BASE_URL', 'http://localhost:3001'),
+  corsOrigins: list('CORS_ORIGINS', ['http://localhost:3000', 'http://localhost:3001']),
   logLevel: str('LOG_LEVEL', isProd ? 'info' : 'debug'),
 
   db: {
@@ -81,6 +82,15 @@ export const env = {
     accessTtl: str('JWT_ACCESS_TTL', '15m'),
     refreshTtl: str('JWT_REFRESH_TTL', '30d'),
     bcryptRounds: num('BCRYPT_ROUNDS', 10),
+    /**
+     * Domain for the non-secret `tx_session` hint cookie, e.g. `.tixit.in`, so
+     * every Tixit app can tell server-side that a session exists. Blank keeps it
+     * host-only, which is right for localhost. The refresh credential itself is
+     * always host-only on the API and never takes this domain.
+     */
+    cookieDomain: optional('COOKIE_DOMAIN'),
+    /** Seconds a just-rotated refresh token may be presented again (tab/app race). */
+    refreshReuseGraceSeconds: num('REFRESH_REUSE_GRACE_SECONDS', 30),
   },
 
   /**

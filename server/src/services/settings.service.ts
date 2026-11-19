@@ -16,6 +16,12 @@ export interface PlatformSettings {
   support_email: string;
   platform_name: string;
   auto_approve_events: boolean;
+  /** Flat platform fee per dine-in bill, GST inclusive, in paise. */
+  dining_convenience_fee_paise: number;
+  /** Paid dine-in bills not disputed within this many hours are auto-verified. */
+  dining_auto_verify_hours: number;
+  /** How many days ahead diners can book a table. */
+  dining_slot_horizon_days: number;
 }
 
 const DEFAULTS: PlatformSettings = {
@@ -27,6 +33,9 @@ const DEFAULTS: PlatformSettings = {
   support_email: 'support@tixit.in',
   platform_name: 'Tixit',
   auto_approve_events: false,
+  dining_convenience_fee_paise: 1000,
+  dining_auto_verify_hours: 6,
+  dining_slot_horizon_days: 14,
 };
 
 const CACHE_TTL_MS = 30_000;

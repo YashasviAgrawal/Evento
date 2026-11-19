@@ -22,6 +22,9 @@ import adminRoutes from './modules/admin/admin.routes';
 import { adminBlogRoutes, publicBlogRoutes } from './modules/blog/blog.routes';
 import cmsRoutes from './modules/cms/cms.routes';
 import uploadRoutes, { uploadDir } from './modules/uploads/upload.routes';
+import diningRoutes from './modules/dining/dining.routes';
+import partnerRoutes from './modules/dining/partner/partner.routes';
+import diningAdminRoutes from './modules/dining/admin/dining-admin.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -55,6 +58,7 @@ export function createApp(): Express {
       },
       credentials: true,
       exposedHeaders: ['x-request-id', 'content-disposition'],
+      allowedHeaders: ['content-type', 'authorization', 'x-tixit-client', 'idempotency-key', 'x-requested-with'],
     }),
   );
 
@@ -140,11 +144,16 @@ export function createApp(): Express {
   // Must precede the '/admin' mount, which would otherwise match first and
   // 404 on an unknown /blog path inside its own router.
   api.use('/admin/blog', adminBlogRoutes);
+  api.use('/admin/dining', diningAdminRoutes);
   api.use('/admin', adminRoutes);
   // The CMS authenticates against its own account table with its own signing
   // key, so it mounts as a peer of /admin rather than underneath it.
   api.use('/cms', cmsRoutes);
   api.use('/uploads', uploadRoutes);
+  // Tixit Dine-in (dinein.tixit.in): discovery, reservations, Pay Bill, and
+  // the restaurant partner console — same API, same session, same database.
+  api.use('/dining', diningRoutes);
+  api.use('/partner', partnerRoutes);
 
   api.get('/', (_req, res) =>
     ok(res, {

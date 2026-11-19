@@ -701,7 +701,7 @@ router.post(
 
     // A suspended user's live sessions must die immediately.
     if (req.body.status === 'suspended') {
-      await query('UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [
+      await query("UPDATE refresh_tokens SET revoked_at = now(), revoke_reason = 'admin' WHERE user_id = $1 AND revoked_at IS NULL", [
         req.params.id,
       ]);
     }

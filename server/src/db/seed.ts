@@ -9,6 +9,7 @@
 import bcrypt from 'bcryptjs';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
+import { seedDining } from './seed-dining';
 import { closePool, query, queryOne, withTransaction } from './pool';
 import { generateBookingCode, slugify } from '../utils/ids';
 import { signTicket, generateTicketCodeUnique } from './seed.helpers';
@@ -298,7 +299,11 @@ async function clearDemoData(): Promise<void> {
   await query(`
     TRUNCATE TABLE
       coupon_redemptions, payment_events, payments, refunds, tickets, booking_items, bookings,
-      ticket_types, events, venues, coupons, notifications, audit_logs, otp_codes, refresh_tokens, organizers
+      ticket_types, events, venues, coupons, notifications, audit_logs, otp_codes, refresh_tokens, organizers,
+      finance.entries, finance.transactions, finance.settlements, finance.accounts,
+      dining.reviews, dining.offer_redemptions, dining.bill_payments, dining.reservations, dining.slots,
+      dining.offers, dining.inventory_rules, dining.restaurant_members, dining.restaurant_media,
+      dining.collections, dining.restaurants
     RESTART IDENTITY CASCADE
   `);
   // '@evento.test' is the pre-rebrand demo domain — still cleaned up so a dev
@@ -637,6 +642,9 @@ async function seed(): Promise<void> {
     );
   }
 
+  /* ── Tixit Dine-in ── */
+  await seedDining({ adminId: admin!.id, customerIds: customers, passwordHash });
+
   logger.info(
     {
       admins: 1,
@@ -661,6 +669,10 @@ async function seed(): Promise<void> {
 │             diya@example.com                                 │
 ├──────────────────────────────────────────────────────────────┤
 │  Coupons    WELCOME10 · FLAT200 · TIXIT25                    │
+├──────────────────────────────────────────────────────────────┤
+│  Dine-in    partner@tixit.test   owns Ember & Oak + Terrace  │
+│             cashier@tixit.test   cashier at Ember & Oak      │
+│  Codes      TIXITDINE (₹100 off) · FIRSTBITE (10% off)       │
 └──────────────────────────────────────────────────────────────┘
 `);
 }
