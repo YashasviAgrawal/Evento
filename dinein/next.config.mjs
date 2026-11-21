@@ -42,6 +42,16 @@ const nextConfig = {
       { protocol: 'http', hostname: 'localhost' },
     ],
   },
+  /**
+   * Without a shared parent domain (e.g. *.vercel.app + *.onrender.com), set
+   * API_PROXY_TARGET to the API origin and NEXT_PUBLIC_API_URL to this app's own
+   * /api/v1: the browser then talks to one origin, so the session cookies are
+   * first-party and sign-in survives reloads. Unset (local, tixit.in): no proxy.
+   */
+  async rewrites() {
+    const target = process.env.API_PROXY_TARGET?.replace(/\/+$/, '');
+    return target ? [{ source: '/api/v1/:path*', destination: `${target}/api/v1/:path*` }] : [];
+  },
   async headers() {
     return [
       {
