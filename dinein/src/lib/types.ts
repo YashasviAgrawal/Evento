@@ -35,8 +35,12 @@ export interface RestaurantCard {
   sponsored: boolean;
   openNow: boolean;
   closesAt: string | null;
+  /** Next opening later today ("13:00") when closed now. */
+  opensAt: string | null;
   distanceKm: number | null;
   bestOffer: { label: string; appliesTo: OfferAppliesTo; percentOff: number | null; flatOffPaise: number | null } | null;
+  /** Active restaurant offers, so cards can say "+2 more". */
+  offerCount: number;
   nextSlots?: SlotView[];
 }
 
@@ -128,6 +132,7 @@ export interface HomeFeed {
   topRated: RestaurantCard[];
   collections: Array<{ slug: string; title: string; subtitle: string | null; coverUrl: string | null; count: number }>;
   cuisines: Array<{ name: string; count: number }>;
+  localities: Array<{ name: string; count: number }>;
   festivals: Festival[];
 }
 

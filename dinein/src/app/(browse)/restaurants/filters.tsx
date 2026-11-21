@@ -46,13 +46,13 @@ export function Filters({ cuisines }: { cuisines: string[] }) {
 
   const toggle = (key: string, value = '1') => update({ [key]: params.get(key) === value ? null : value });
 
-  function nearMe() {
+  function nearMe(extra: Record<string, string> = {}) {
     if (!navigator.geolocation) return;
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocating(false);
-        update({ lat: position.coords.latitude.toFixed(5), lng: position.coords.longitude.toFixed(5), sort: 'distance' });
+        update({ lat: position.coords.latitude.toFixed(5), lng: position.coords.longitude.toFixed(5), sort: 'distance', ...extra });
       },
       () => setLocating(false),
       { timeout: 8000, maximumAge: 300_000 },
@@ -113,14 +113,26 @@ export function Filters({ cuisines }: { cuisines: string[] }) {
       </form>
 
       <div className="scrollbar-none -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
-        <Chip active={hasLocation} onClick={hasLocation ? () => update({ lat: null, lng: null, sort: null }) : nearMe}>
+        <Chip active={hasLocation} onClick={hasLocation ? () => update({ lat: null, lng: null, sort: null, maxKm: null }) : () => nearMe()}>
           <LocateFixed className="h-3.5 w-3.5" /> {locating ? 'Locating…' : 'Near me'}
+        </Chip>
+        <Chip
+          active={params.get('maxKm') === '5'}
+          onClick={() => (params.get('maxKm') === '5' ? update({ maxKm: null }) : hasLocation ? update({ maxKm: '5' }) : nearMe({ maxKm: '5' }))}
+        >
+          Within 5 km
+        </Chip>
+        <Chip active={params.get('booking') === '1'} onClick={() => toggle('booking')}>
+          Book a table
         </Chip>
         <Chip active={params.get('openNow') === '1'} onClick={() => toggle('openNow')}>
           Open now
         </Chip>
         <Chip active={params.get('offers') === '1'} onClick={() => toggle('offers')}>
           With offers
+        </Chip>
+        <Chip active={params.get('minRating') === '4.5'} onClick={() => toggle('minRating', '4.5')}>
+          Rating 4.5+
         </Chip>
         {TAGS.map((tag) => (
           <Chip key={tag} active={params.get('tag') === tag} onClick={() => toggle('tag', tag)}>

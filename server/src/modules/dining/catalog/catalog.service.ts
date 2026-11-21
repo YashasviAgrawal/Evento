@@ -35,6 +35,7 @@ interface CardRow {
   best_flat_paise: number | null;
   best_applies_to: 'prebook' | 'walkin' | 'both' | null;
   distance_km?: number | null;
+  offer_count: number;
 }
 
 export interface RestaurantCard {
@@ -56,8 +57,12 @@ export interface RestaurantCard {
   sponsored: boolean;
   openNow: boolean;
   closesAt: string | null;
+  /** Next opening later today ("13:00") when closed now; null if open or done for the day. */
+  opensAt: string | null;
   distanceKm: number | null;
   bestOffer: { label: string; appliesTo: 'prebook' | 'walkin' | 'both'; percentOff: number | null; flatOffPaise: number | null } | null;
+  /** Active restaurant offers, so cards can say "+2 more". */
+  offerCount: number;
   nextSlots?: SlotView[];
 }
 
@@ -72,6 +77,10 @@ function cardSelect(extra = ''): string {
          r.cost_for_two_paise, r.cover_url, r.logo_url, r.rating_avg, r.rating_count, r.pay_bill_enabled,
          r.booking_enabled, r.is_featured, r.hours, r.lat, r.lng,
          bo.percent_off AS best_percent, bo.flat_off_paise AS best_flat_paise, bo.applies_to AS best_applies_to,
+         (SELECT count(*)::int FROM dining.offers o
+           WHERE o.restaurant_id = r.id AND o.owner = 'restaurant' AND o.code IS NULL AND o.status = 'active'
+             AND (o.valid_from IS NULL OR o.valid_from <= now())
+             AND (o.valid_until IS NULL OR o.valid_until > now())) AS offer_count,
          EXISTS (SELECT 1 FROM dining.promotions p
                   WHERE p.restaurant_id = r.id AND p.status = 'active'
                     AND (now() AT TIME ZONE '${DINING_TZ}')::date BETWEEN p.starts_on AND p.ends_on) AS sponsored
@@ -133,7 +142,9 @@ function toCard(row: CardRow): RestaurantCard {
     sponsored: row.sponsored,
     openNow: state.openNow,
     closesAt: state.closesAt,
-    distanceKm: row.distance_km === undefined || row.distance_km === null ? null : Math.round(Number(row.distance_km) * 10) / 10,
+    opensAt: state.opensAt,
+    // Two decimals (10 m) so short walks can be shown in metres.
+    distanceKm: row.distance_km === undefined || row.distance_km === null ? null : Math.round(Number(row.distance_km) * 100) / 100,
     bestOffer:
       label && row.best_applies_to
         ? {
@@ -143,6 +154,7 @@ function toCard(row: CardRow): RestaurantCard {
             flatOffPaise: row.best_flat_paise === null ? null : Number(row.best_flat_paise),
           }
         : null,
+    offerCount: Number(row.offer_count ?? 0),
   };
 }
 
@@ -165,6 +177,11 @@ export interface SearchInput {
   payBill?: boolean;
   openNow?: boolean;
   maxCostForTwo?: number;
+  minRating?: number;
+  /** Only places that take table bookings. */
+  booking?: boolean;
+  /** Radius around lat/lng; ignored without a location. */
+  maxKm?: number;
   sort?: 'relevance' | 'rating' | 'distance' | 'cost_low' | 'cost_high' | 'offer';
   lat?: number;
   lng?: number;
@@ -186,6 +203,8 @@ export async function searchRestaurants(input: SearchInput): Promise<{ items: Re
   if (input.payBill) where.push('r.pay_bill_enabled');
   if (input.offers) where.push('(bo.percent_off IS NOT NULL OR bo.flat_off_paise IS NOT NULL)');
   if (input.maxCostForTwo) where.push(`r.cost_for_two_paise <= ${add(input.maxCostForTwo * 100)}`);
+  if (input.minRating) where.push(`r.rating_avg >= ${add(input.minRating)}`);
+  if (input.booking) where.push('r.booking_enabled');
 
   let rank = '0';
   if (input.q?.trim()) {
@@ -199,6 +218,7 @@ export async function searchRestaurants(input: SearchInput): Promise<{ items: Re
 
   const hasGeo = input.lat !== undefined && input.lng !== undefined;
   const distance = hasGeo ? distanceSql(add(input.lat), add(input.lng)) : 'NULL::float';
+  if (hasGeo && input.maxKm) where.push(`${distance} <= ${add(input.maxKm)}`);
 
   // Sorts run on the outer query's computed columns, never on raw SQL text.
   const order: Record<NonNullable<SearchInput['sort']>, string> = {
@@ -283,6 +303,14 @@ export async function homeFeed(citySlug: string) {
     [city.id],
   );
 
+  const { rows: localities } = await query<{ name: string; count: number }>(
+    `SELECT r.locality AS name, count(*)::int AS count
+       FROM dining.restaurants r
+      WHERE r.status = 'live' AND r.city_id = $1
+      GROUP BY r.locality ORDER BY count DESC, r.locality LIMIT 20`,
+    [city.id],
+  );
+
   return {
     city,
     restaurantCount: cards.length,
@@ -297,6 +325,7 @@ export async function homeFeed(citySlug: string) {
       count: collection.count,
     })),
     cuisines,
+    localities,
   };
 }
 

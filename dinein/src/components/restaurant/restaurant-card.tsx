@@ -1,12 +1,43 @@
 import Link from 'next/link';
-import { MapPin } from 'lucide-react';
+import { BadgePercent, MapPin } from 'lucide-react';
 import type { RestaurantCard as Card } from '@/lib/types';
-import { cn, rupees, shortClock } from '@/lib/format';
+import { cn, distanceLabel, openStatus, rupees, shortClock } from '@/lib/format';
 import { Photo } from '@/components/ui/photo';
 import { OfferBadge, RatingPill } from './bits';
 
 function meta(card: Card): string {
   return [card.cuisines.slice(0, 2).join(' · '), `${rupees(card.costForTwoPaise)} for two`].join(' · ');
+}
+
+const STATUS_TONE = {
+  open: 'bg-save-50 text-save-700',
+  soon: 'bg-amber-50 text-amber-700',
+  closed: 'bg-ink-100 text-ink-500',
+} as const;
+
+const OFFER_WHERE = { prebook: 'on pre-booking', walkin: 'on the bill', both: 'on pre-booking or bill' } as const;
+
+/** "Flat 30% off on pre-booking   +1 more" — what the deal is, when it applies, and that there is more. */
+function OfferStrip({ card }: { card: Card }) {
+  if (!card.bestOffer) return null;
+  const more = Math.max(0, (card.offerCount ?? 1) - 1);
+  return (
+    <p className="flex items-center justify-between gap-2 rounded-xl bg-save-600 px-2.5 py-1.5 text-[12px] font-bold text-white">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <BadgePercent className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span className="truncate">
+          {card.bestOffer.label} {OFFER_WHERE[card.bestOffer.appliesTo]}
+        </span>
+      </span>
+      {more > 0 && <span className="shrink-0 text-[11px] text-white/85">+{more} more</span>}
+    </p>
+  );
+}
+
+/** "Open now" · "Opens in 28 min" · "Opens at 1:00 PM" — so nobody walks up to a shut door. */
+function StatusPill({ card }: { card: Card }) {
+  const status = openStatus(card);
+  return <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold', STATUS_TONE[status.tone])}>{status.label}</span>;
 }
 
 /**
@@ -49,10 +80,15 @@ export function RestaurantCard({ card, priority = false, className }: { card: Ca
           <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
           <span className="truncate">
             {card.locality}
-            {card.distanceKm !== null && ` · ${card.distanceKm} km`}
+            {card.distanceKm !== null && ` · ${distanceLabel(card.distanceKm)}`}
           </span>
         </span>
       </div>
+      {!card.openNow && (
+        <div className="px-3.5 pt-2">
+          <StatusPill card={card} />
+        </div>
+      )}
 
       {card.nextSlots && card.nextSlots.length > 0 ? (
         <div className="grid grid-cols-3 gap-1.5 p-3">
@@ -110,13 +146,7 @@ export function ResultRow({ card }: { card: Card }) {
       href={`/r/${card.slug}`}
       className="press group flex gap-3.5 rounded-3xl bg-white p-2.5 ring-1 ring-ink-200/80 transition hover:shadow-lift sm:gap-4 sm:p-3"
     >
-      <Photo src={card.coverUrl} alt={card.name} sizes="160px" className="aspect-square w-28 shrink-0 rounded-2xl sm:w-36">
-        {card.bestOffer && (
-          <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-save-700 to-save-600/90 px-2 py-1 text-center text-[11px] font-extrabold text-white">
-            {card.bestOffer.label}
-          </span>
-        )}
-      </Photo>
+      <Photo src={card.coverUrl} alt={card.name} sizes="160px" className="aspect-square w-28 shrink-0 rounded-2xl sm:w-36" />
       <div className="flex min-w-0 flex-1 flex-col py-0.5">
         <div className="flex items-start justify-between gap-2">
           <h3 className="line-clamp-1 text-base font-extrabold tracking-tight text-ink-900 group-hover:text-brand-700">{card.name}</h3>
@@ -125,23 +155,21 @@ export function ResultRow({ card }: { card: Card }) {
         <p className="mt-0.5 line-clamp-1 text-[13px] text-ink-500">{card.cuisines.join(', ')}</p>
         <p className="mt-0.5 text-[13px] text-ink-500">
           {card.locality}
-          {card.distanceKm !== null && ` · ${card.distanceKm} km`} · {rupees(card.costForTwoPaise)} for two
+          {card.distanceKm !== null && ` · ${distanceLabel(card.distanceKm)}`} · {rupees(card.costForTwoPaise)} for two
         </p>
         <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
           {card.sponsored && (
             <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-ink-500 ring-1 ring-inset ring-ink-200">Sponsored</span>
           )}
-          <span
-            className={cn(
-              'rounded-full px-2 py-0.5 text-[11px] font-bold',
-              card.openNow ? 'bg-save-50 text-save-700' : 'bg-ink-100 text-ink-500',
-            )}
-          >
-            {card.openNow ? 'Open now' : 'Closed now'}
-          </span>
+          <StatusPill card={card} />
           {card.payBillEnabled && <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-bold text-ink-600">Pay bill</span>}
           {card.bookingEnabled && <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-bold text-ink-600">Book a table</span>}
         </div>
+        {card.bestOffer && (
+          <div className="pt-2">
+            <OfferStrip card={card} />
+          </div>
+        )}
       </div>
     </Link>
   );

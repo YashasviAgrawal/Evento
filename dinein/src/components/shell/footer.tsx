@@ -1,8 +1,11 @@
 import Link from 'next/link';
+import { fetchPublic } from '@tixit/session';
 import { EVENTS_URL } from '@/lib/urls';
 import { Wordmark } from './site-header';
 
-export function Footer() {
+export async function Footer() {
+  // Cities with live restaurants — crawlable entry points into each city.
+  const cities = (await fetchPublic<Array<{ name: string; slug: string }>>('/dining/cities', undefined, 3600)) ?? [];
   return (
     <footer className="mt-20 hidden border-t border-ink-200 bg-white md:block">
       <div className="container-page flex flex-wrap items-start justify-between gap-8 py-10">
@@ -24,6 +27,20 @@ export function Footer() {
           <Link href="/grievance" className="text-ink-600 hover:text-ink-900">Grievance officer</Link>
           <Link href="/account/privacy" className="text-ink-600 hover:text-ink-900">Privacy settings</Link>
         </div>
+        {cities.length > 0 && (
+          <div className="text-sm">
+            <p className="font-bold text-ink-900">Available in</p>
+            <ul className="mt-2 grid grid-cols-2 gap-x-8 gap-y-2">
+              {cities.slice(0, 12).map((city) => (
+                <li key={city.slug}>
+                  <Link href={`/restaurants?city=${city.slug}`} className="text-ink-600 hover:text-ink-900">
+                    {city.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
       <div className="border-t border-ink-100 py-5 text-center text-xs text-ink-400">
         © {new Date().getFullYear()} Tixit · Service charge on Tixit is always optional and never discounted.

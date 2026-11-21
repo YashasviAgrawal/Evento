@@ -99,6 +99,51 @@ export function humanTag(tag: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/** "340 m" under a kilometre, "2.4 km" beyond, "12 km" once precision stops mattering. */
+export function distanceLabel(km: number): string {
+  if (km < 1) return `${Math.max(10, Math.round(km * 100) * 10)} m`;
+  return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
+}
+
+/** Minutes since local midnight in restaurant time. */
+function localMinutes(now: Date): number {
+  const [h = 0, m = 0] = now
+    .toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ })
+    .split(':')
+    .map(Number);
+  return (h % 24) * 60 + m;
+}
+
+const toMinutes = (hhmm: string) => {
+  const [h = 0, m = 0] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+
+/**
+ * What a diner needs at a glance: "Open now", "Closes in 25 min",
+ * "Opens in 28 min", "Opens at 1:00 PM" or "Closed now".
+ */
+export function openStatus(
+  card: { openNow: boolean; closesAt: string | null; opensAt: string | null },
+  now = new Date(),
+): { label: string; tone: 'open' | 'soon' | 'closed' } {
+  const current = localMinutes(now);
+  if (card.openNow) {
+    if (card.closesAt) {
+      let left = toMinutes(card.closesAt) - current;
+      if (left < 0) left += 24 * 60; // closes past midnight
+      if (left <= 45) return { label: `Closes in ${left} min`, tone: 'soon' };
+    }
+    return { label: 'Open now', tone: 'open' };
+  }
+  if (card.opensAt) {
+    const wait = toMinutes(card.opensAt) - current;
+    if (wait > 0 && wait <= 60) return { label: `Opens in ${wait} min`, tone: 'soon' };
+    return { label: `Opens at ${clock(card.opensAt)}`, tone: 'closed' };
+  }
+  return { label: 'Closed now', tone: 'closed' };
+}
+
 /** ₹950 · ₹12k · ₹1.4L — for chart labels and tight tiles. */
 export function compactRupees(paise: number): string {
   const value = paise / 100;

@@ -25,6 +25,16 @@ pool.on('error', (err) => {
   logger.error({ err }, 'Unexpected error on idle PostgreSQL client');
 });
 
+// pg-pool only listens for errors while a client is idle. A checked-out client
+// (e.g. a scheduler job holding its advisory-lock connection) whose socket is
+// reset would otherwise emit an unhandled 'error' and crash the process. The
+// in-flight query still rejects, and the pool discards the broken client on release.
+pool.on('connect', (client) => {
+  client.on('error', (err) => {
+    logger.warn({ err }, 'PostgreSQL connection lost while checked out');
+  });
+});
+
 /**
  * The subset of the pg client surface this codebase uses. Both `PoolClient`
  * (inside a transaction) and the module-level `query` helper satisfy it, so

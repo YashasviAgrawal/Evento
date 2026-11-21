@@ -1,6 +1,6 @@
 import type { Config } from 'tailwindcss';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const tixitPreset = require('../packages/config/tailwind-preset.cjs');
+// An import, not require(): Node 22+ loads this file as ESM, where require is undefined.
+import tixitPreset from '../packages/config/tailwind-preset.cjs';
 
 /** Brand tokens live in the shared Tixit preset; this app only adds its content paths. */
 const config: Config = {
