@@ -1,0 +1,5 @@
+langchain==0.3.27
+langchain-openai==0.3.33
+python-dotenv==1.1.1
+tiktoken==0.11.0
+ipykernel==6.30.1
